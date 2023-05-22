@@ -1,0 +1,630 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# loading
+```{r}
+library(dplyr)
+library(parallel)
+library(Rmisc)
+library(ggplot2)
+library(gridExtra)
+library(ggrepel)
+library(lmerTest)
+library(data.table)
+library(stringr)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+load("exp1_forComb.Rda")
+dt1.ans=df.off %>%
+  select(subID,delayCond,trOrder,trName,cyclic,nodeNum,belief,accLink,acc_nor)%>%
+  mutate(expID="EXP1",
+         trNameRaw=trName,
+         trName=paste(trName,expID,sep="_"),
+         uni_label=paste(subID,trNameRaw,sep="_"))
+dt1.sti=df.eve %>% 
+  select(subID,delayCond,trOrder,trName,cyclic,nodeNum,obj,time,act)%>%
+  mutate(blc=0,
+         expID="EXP1",
+         trNameRaw=trName,
+         trName=paste(trName,expID,sep="_"),
+         uni_label=paste(subID,trNameRaw,sep="_"))
+
+load("exp2_forComb.Rda")
+dt2.ans=df.off %>%
+  select(subID,delayCond,trOrder,trName,cyclic,nodeNum,belief,accLink,acc_nor)%>%
+  mutate(expID="EXP2",
+         trNameRaw=trName,
+         trName=paste(trName,expID,sep="_"),
+         uni_label=paste(subID,trNameRaw,sep="_"))
+dt2.sti=df.eve %>% 
+  select(subID,delayCond,trOrder,trName,cyclic,nodeNum,obj,time,act,blc)%>%
+  mutate(expID="EXP2",
+         trNameRaw=trName,
+         trName=paste(trName,expID,sep="_"),
+         uni_label=paste(subID,trNameRaw,sep="_"))
+
+str_name=c(paste(c('colli3','chain3','fork3','colli4','chain4','fork4',
+           'loop_in3','clock3','loop_out3','loop_inout4','clock4','clock_out4'),"EXP1",sep="_"),
+           paste(c('colli3','chain3','fork3','colli4','chain4','fork4',
+                   'uncon3','fully3','uncon4','fully4',
+                   'loop_in3','clock3','loop_out3','loop_inout4','clock4',
+                   'clock_out4','loop_double_out3','loop_double_out4'),"EXP2",sep="_"))
+
+
+str_node=c(c("3","3","3","4","4","4","3","3","3","4","4","4"),
+           c("3","3","3","4","4","4","3","3","4","4",
+           "3","3","3","4","4","4","3","4"))
+str_belief=c(c(13,11,5,299,218,30,
+             50,35,33,1385,1449,1370),
+             c(9,16,12,59,264,30,1,17,1,265,
+             37,35,57,3217,1449,1855,59,3233))
+
+load("DBN.Rdata")
+DBN_list=list("3"=DBN3,"4"=DBN4)
+nod_list=list("3"=c("A","B","C"),"4"=c("A","B","C","D"))
+
+lin_list=list("3"=list(c(1,2),c(1,3),c(2,3)),
+              "4"=list(c(1,2),c(1,3),c(2,3),c(1,4),c(2,4),c(3,4)))
+
+# dt.ans=rbind(dt1.ans,dt2.ans)
+# dt.sti=rbind(dt1.sti,dt2.sti)
+dt.ans=rbind(dt1.ans)
+dt.sti=rbind(dt1.sti)
+```
+
+```{r}
+myIO<-function(par,vals){
+  sf=exp(par[1])
+  vals=vals %>% mutate(u=exp(md/sf))
+  
+  sumu=vals[,.(sum_u = sum(u)),by="uniLabel"]
+  
+  vals_sub=vals %>% subset(ppl==1)%>%
+    mutate(li=u/sumu$sum_u)
+  -sum(log(vals_sub$li))
+}
+```
+
+
+# rate-based model
+```{r}
+myDecay<-function(th,t){
+  if (length(t)==0){return(0)}
+  s=th[1]
+  r=th[2]
+  dgamma(t,shape = s,rate=r)/dgamma((s-1)/r,shape = s,rate=r)
+}
+
+MyRate<-function(pa,cau,eff,blc_vec){
+  d=table(cut(eff,breaks =mycut))
+  decay=0
+  if (length(cau)>0){
+    decay=sapply(cau,function(x){pmax(0,mycut[-length(mycut)]-x) %>% myDecay(pa[3:4],.)  }) %>% rowSums()
+  }
+ 
+  cbind(d,pa[1]+pa[2]*decay) %>%
+    apply(1, function(x){dpois(x[1],x[2])}) %>%
+    pmax(blc_vec) %>%
+    prod()
+}
+```
+
+
+```{r}
+k_r=200;r_r=200/1500;k_i=5;r_i=5/1500;lam0=0
+
+samp=1
+lam1=0.9
+
+par_list=list("reliable"=cbind(lam0,lam1,k_r,r_r),
+              "unreliable"=cbind(lam0,lam1,k_i,r_i))
+```
+
+```{r}
+win_len=500
+trial_end=45000
+mycut=seq(win_len,trial_end,by=win_len)
+myblc_df=table(cut(-100,breaks =mycut))%>%-1e2 #default
+
+myRBrun<-function(sqc){
+  par=par_list[[sqc$delayCond[1]]]
+  STR=DBN_list[[sqc$nodeNum[1]]]
+  nod=nod_list[[sqc$nodeNum[1]]]
+  ######calculating the blocking situations
+  myblc=rep(list(myblc_df),length(nod))
+  for (m in 1:length(nod)){
+    sqc_sub=sqc %>% subset(obj==nod[m] & act==-1)
+    if (nrow(sqc_sub)==0){next}
+    tim=sqc_sub$time;if (length(tim) %% 2 ==1){tim=c(tim,1e6)}
+    for (i in 1:(length(tim)/2)){
+      myblc[[m]]=myblc[[m]]+ 1e3*(mycut[1:(length(mycut)-1)] %>% sapply(function(x){x>=tim[i*2-1] && x<=tim[i*2]}))
+    }
+    myblc[[m]]=pmin(myblc[[m]],1)
+  }
+  ######
+  
+  li_rb=rep(NA,dim(STR)[3])
+  for (k in 1: dim(STR)[3]){
+    str=STR[,,k]
+    li=rep(NA,nrow(par))
+    for (i in 1:nrow(par)){
+      pa=par[i,]
+      li[i]=1
+      for (m in 1:length(nod)){
+        eff=subset(sqc,obj==nod[m] & act==0) %>% pull(time)
+        cau=subset(sqc,obj%in% nod[which(str[,m]==1)]) %>% pull(time)
+        
+        li[i]= li[i]*MyRate(pa,cau,eff,myblc[[m]])
+      }
+    }
+    li_rb[k]=mean(li)
+  }
+  myli=list("uni_label"=sqc$uni_label[1],"li"=li_rb,trName=sqc$trName[1])
+  save(myli,
+       file=paste("rb/",sqc$uni_label[1],".Rda",sep="") )
+}
+
+# split(dt.sti,dt.sti$uni_label)%>%
+#   mclapply(
+#     myRBrun,
+#     mc.cores = 6
+#   )
+
+# dt.sti1=dt.sti %>% subset(expID=="EXP1")
+# split(dt.sti1,dt.sti1$uni_label) %>%
+#   mclapply(
+#     myRBrun,
+#     mc.cores = 20
+#   )
+```
+
+
+# result
+```{r}
+file=list.files("rb/")
+lis.rb=list()
+for (k in file){
+  load(paste("rb",k,sep="/"))
+  lis.rb[[substr(k,1,nchar(k)-4)]]=myli$li
+}
+```
+
+# judgment model fitting
+```{r}
+# choi_list=c("0 0","1 0","0 1","1 1")
+# myLinkJud<-function(tr){
+#   li=lis.rb[[tr]]/sum(lis.rb[[tr]])
+#   
+#   dt=dt.ans %>% filter(uni_label==tr)
+#   bel=dt$belief[1]
+#     
+#   STR=DBN_list[[dt$nodeNum[1]]]
+#   lin=lin_list[[dt$nodeNum[1]]]
+#   
+#   d=expand.grid(choi=c(1:4),lin=c(1:length(lin))) %>% data.frame(trName=tr,md=0,ppl=0)
+#   
+#   for (k in 1:length(lin)){
+#     p=paste(STR[lin[[k]][1],lin[[k]][2],bel],STR[lin[[k]][2],lin[[k]][1],bel])
+#     d$ppl[intersect(which(d$choi==which(choi_list==p)),which(d$lin==k))]=1
+#     for (i in 1: dim(STR)[3]){
+#       cur=paste(STR[lin[[k]][1],lin[[k]][2],i],STR[lin[[k]][2],lin[[k]][1],i])
+#       idx=intersect(which(d$choi==which(choi_list==cur)),which(d$lin==k))
+#       d$md[idx]=d$md[idx]+li[i]
+#     }
+#   }
+#   return(d)
+# }
+# t0=Sys.time()
+# jud_rb= as.list(dt.ans$uni_label)%>% mclapply(myLinkJud,mc.cores = 4)
+# Sys.time()-t0
+# save(jud_rb,file="jud_rb.Rda")
+load("jud_rb.Rda")
+```
+
+```{r}
+md=jud_rb %>% do.call(rbind.data.frame, .) %>%
+  mutate(uniLabel=paste(trName,lin,sep="_")) %>%
+  subset(!trName %in% dt.ans$uni_label[is.na(dt.ans$acc_nor)])%>%
+  subset(!trName %in% c("5955b6df620d1400019f2787_loop_in3",
+                        "5892537355550f0001509c35_clock3",
+                        "5640ee4a17bdbe00062a0a40_fork3")) %>%
+  as.data.table()
+
+
+md$str=NA
+for (k in 1:nrow(md)){
+  md$str[k]=substr(md$trName[k],unlist(gregexpr("_",md$trName[k]))[1]+1,nchar(md$trName[k]))
+}
+
+md$md_choi=0
+for (k in unique(md$uniLabel)){
+  idx=which(md$uniLabel==k) 
+  m=which(md$md[idx]==max(md$md[idx]))
+  md$md_choi[idx[m]]=1
+}
+
+md$trLabel=paste(md$str,md$lin,sep="_")
+```
+
+```{r}
+pic=data.frame()
+for (k in unique(md$trLabel)){
+  tmp=md %>% subset(trLabel==k)
+  tmp2=tmp%>%
+    dplyr::group_by(choi,lin,str,trLabel)%>%
+    dplyr::summarise(ppl=sum(ppl),md=sum(md),.groups="drop_last")
+  tmp2$ci=summarySE(tmp,measurevar = "ppl",groupvars = c("choi","lin","str","trLabel"))$ci
+  tmp2$ppl=tmp2$ppl/sum(tmp2$ppl)
+  tmp2$md=tmp2$md/sum(tmp2$md)
+  pic=rbind(pic,tmp2)
+}
+
+pic=pic %>% 
+    mutate(choi=factor(choi),
+         cyclic=ifelse(str %in%  c('colli3','chain3','fork3','colli4','chain4','fork4'),"acyclic","cyclic")
+         )
+```
+
+```{r}
+mySF<-function(sf,vals){
+  vals$md_sf= exp(vals$md/sf)
+  
+  for (k in unique(vals$trLabel)){
+      idx=which(vals$trLabel==k)
+      vals$md_sf[idx]=vals$md_sf[idx]/sum(vals$md_sf[idx])
+  }
+  # 1-cor(vals$md_sf,vals$ppl)
+  -sum(log(vals$md_sf)*vals$ppl)
+}
+
+x=optim(100,mySF,vals=pic,method ="Brent", upper = 1000,lower = 0)
+
+pic$md_sf= exp(pic$md/0.4987066)
+for (k in unique(pic$trLabel)){
+    idx=which(pic$trLabel==k)
+    pic$md_sf[idx]=pic$md_sf[idx]/sum(pic$md_sf[idx])
+}
+```
+
+```{r}
+p1=pic %>%
+  mutate(cyclic=factor(cyclic,levels=c("acyclic","cyclic"),labels=c("Acyclic","Cyclic")))%>%
+  mutate(cor=ifelse(cyclic=="Acyclic","r = .89","r = .84"))%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+  geom_point(aes(color=choi,shape=choi),size=2)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  facet_wrap(~cyclic)+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.94,0.2),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(pic$md_sf[pic$cyclic=="acyclic"],pic$ppl[pic$cyclic=="acyclic"])
+cor(pic$md_sf[pic$cyclic=="cyclic"],pic$ppl[pic$cyclic=="cyclic"])
+```
+
+```{r}
+p2=pic %>%
+  mutate(cyclic=factor(cyclic,levels=c("acyclic","cyclic"),labels=c("Acyclic","Cyclic")))%>%
+  mutate(cor=ifelse(cyclic=="Acyclic","rho*' = .53'","rho*' = .71'"))%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=choi,shape=choi),size=2)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  facet_wrap(~cyclic)+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=14, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.94,0.2),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(pic$md_sf[pic$cyclic=="acyclic"],pic$ppl[pic$cyclic=="acyclic"],method = "spearman")
+cor(pic$md_sf[pic$cyclic=="cyclic"],pic$ppl[pic$cyclic=="cyclic"],method = "spearman")
+```
+
+normative model in the paper
+```{r}
+source('per_setting.R')
+load("exp1.Rda")
+sublist=df.dmg$subID %>% as.character()
+load("exp1_forComb.Rda")
+
+mdall=data.frame()
+for (k in unique(df.eve$subID)){
+  load(paste("exp1_nor/",which(sublist==k),".Rda",sep = ""))
+  md.sub=data.frame()
+  df.sub=df.eve %>% subset(subID==k)
+  for (m in unique(df.sub$trName)){
+    sub=df.sub %>% subset(trName==m)
+    nod=sub$nodeNum[1] %>% as.character() %>% as.numeric()
+    if (nod==3){
+      l_lis=c("AB",'AC',"BC")
+      edg_all=edg_all3
+    }else{
+      l_lis=c("AB",'AC',"BC","AD","BD","CD")
+      edg_all=edg_all4
+    }
+    md=data.frame(subID=k,trName=m,expand.grid(mode=c(0,1,2,3),link=l_lis),
+                  eve=nrow(sub)) %>% mutate(io=NA,sub=0)
+    
+    for (l in 1:length(l_lis)){
+      pos=df.post.nor[[max(which(df.jud.nor$trName==m))]]
+      md[md$mode==0  & md$link==l_lis[l],"io"]=sum(pos[which(sapply(edg_all,"[",l)==0)])
+      md[md$mode==1  & md$link==l_lis[l],"io"]=sum(pos[which(sapply(edg_all,"[",l)==1)])
+      md[md$mode==2  & md$link==l_lis[l],"io"]=sum(pos[which(sapply(edg_all,"[",l)==2)])
+      md[md$mode==3  & md$link==l_lis[l],"io"]=sum(pos[which(sapply(edg_all,"[",l)==3)])
+    }
+    jud=df.off %>% subset(trName==m & subID==k)
+    md[md$mode==jud$n1_dir  & md$link==l_lis[1],"sub"]=1
+    md[md$mode==jud$n2_dir  & md$link==l_lis[2],"sub"]=1
+    md[md$mode==jud$n3_dir  & md$link==l_lis[3],"sub"]=1
+    if (nod==4){
+      md[md$mode==jud$n4_dir  & md$link==l_lis[4],"sub"]=1
+      md[md$mode==jud$n5_dir  & md$link==l_lis[5],"sub"]=1
+      md[md$mode==jud$n6_dir  & md$link==l_lis[6],"sub"]=1
+    }
+    md.sub=rbind(md.sub,md)
+  }
+  mdall=rbind(mdall,md.sub)
+}
+
+mdall=mdall %>%  mutate(trLabel=paste(subID,trName,sep="_"),
+                        uniLabel=paste(subID,trName,link,sep="_")) %>% 
+  subset(!trLabel%in% df.off$trLabel[which(is.na(df.off$acc_nor))]) %>%
+  subset(!trLabel %in% c("5955b6df620d1400019f2787_loop_in3","5892537355550f0001509c35_clock3",
+                        "5640ee4a17bdbe00062a0a40_fork3")) #remove three trials that rate-based model return NA due to the current window choice
+
+loglen=length(unique(mdall$uniLabel))
+str_name=c('colli3','chain3','fork3','colli4','chain4','fork4',
+           'loop_in3','clock3','loop_out3','loop_inout4','clock4','clock_out4')
+
+# 
+# re2=optim(2,myIO,vals=vals2,method = "Brent",lower = -20,upper = 20)
+# 2*re2$value+log(loglen)
+```
+
+```{r}
+md=mdall %>%
+  mutate(trLabel=paste(trName,link,sep="_"),
+         md=io,
+         ppl=sub,
+         lin=link,
+         choi=mode+1,
+         str=trName )
+
+pic2=data.frame()
+for (k in unique(md$trLabel)){
+  tmp=md %>% subset(trLabel==k)
+  tmp2=tmp%>%
+    dplyr::group_by(choi,lin,str,trLabel)%>%
+    dplyr::summarise(ppl=sum(ppl),md=sum(md),.groups="drop_last")
+  tmp2$ci=summarySE(tmp,measurevar = "ppl",groupvars = c("choi","lin","str","trLabel"))$ci
+  tmp2$ppl=tmp2$ppl/sum(tmp2$ppl)
+  tmp2$md=tmp2$md/sum(tmp2$md)
+  pic2=rbind(pic2,tmp2)
+}
+
+pic2=pic2 %>% 
+    mutate(choi=factor(choi),
+         cyclic=ifelse(str %in%  c('colli3','chain3','fork3','colli4','chain4','fork4'),"acyclic","cyclic")
+         )
+```
+
+```{r}
+mySF<-function(sf,vals){
+  vals$md_sf= exp(vals$md/sf)
+  
+  for (k in unique(vals$trLabel)){
+      idx=which(vals$trLabel==k)
+      vals$md_sf[idx]=vals$md_sf[idx]/sum(vals$md_sf[idx])
+  }
+  # 1-cor(vals$md_sf,vals$ppl)
+  -sum(log(vals$md_sf)*vals$ppl)
+}
+
+x=optim(100,mySF,vals=pic2,method ="Brent", upper = 1000,lower = 0)
+
+pic2$md_sf= exp(pic2$md/0.6293487)#
+for (k in unique(pic2$trLabel)){
+    idx=which(pic2$trLabel==k)
+    pic2$md_sf[idx]=pic2$md_sf[idx]/sum(pic2$md_sf[idx])
+}
+```
+
+
+```{r}
+p3=pic2 %>%
+  mutate(cyclic=factor(cyclic,levels=c("acyclic","cyclic"),labels=c("Acyclic","Cyclic")))%>%
+  mutate(cor=ifelse(cyclic=="Acyclic","r = .92","r = .83"))%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+  geom_point(aes(color=choi,shape=choi),size=2)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  facet_wrap(~cyclic)+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.94,0.2),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(pic2$md_sf[pic2$cyclic=="acyclic"],pic2$ppl[pic2$cyclic=="acyclic"])
+cor(pic2$md_sf[pic2$cyclic=="cyclic"],pic2$ppl[pic2$cyclic=="cyclic"])
+```
+
+```{r}
+p4=pic2 %>%
+  mutate(cyclic=factor(cyclic,levels=c("acyclic","cyclic"),labels=c("Acyclic","Cyclic")))%>%
+  mutate(cor=ifelse(cyclic=="Acyclic","rho*' = .63'","rho*' = .46'"))%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=choi,shape=choi),size=2)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  facet_wrap(~cyclic)+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=14, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.94,0.2),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(pic2$md_sf[pic2$cyclic=="acyclic"],pic2$ppl[pic2$cyclic=="acyclic"],method = "spearman")
+cor(pic2$md_sf[pic2$cyclic=="cyclic"],pic2$ppl[pic2$cyclic=="cyclic"],method = "spearman")
+```
+
+```{r}
+p3|p1
+ggsave(file="act_pearson.pdf",width = 17,height = 4.5)
+p4|p2
+ggsave(file="act_spearman.pdf",width = 17,height = 4.5)
+```
+
+#acc plot
+```{r}
+p1=df.off %>% 
+  summarySE(measurevar = "accLink",groupvars = c("cyclic","subID")) %>% 
+  summarySE(measurevar = "accLink",groupvars = c("cyclic")) %>% 
+  mutate(cyclic=factor(cyclic,
+                            levels=c("acyclic","cyclic"),
+                            labels=c("Acyclic","Cyclic")))%>%
+  ggplot(aes(x=cyclic,y=accLink,fill=cyclic))+
+  geom_bar(stat="identity",color="black")+
+  geom_errorbar(aes(ymin=accLink-ci,ymax=accLink+ci),width=0.2)+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Accuracy")+
+  ggtitle("Human")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+lis=c()
+for (k in unique(pic2$trLabel)){
+  idx=which(pic2$trLabel==k)
+  lis=c(lis,idx[which.max(pic2$md[idx])])
+}
+
+p2=pic2[lis,] %>% 
+  summarySE(measurevar = "md",groupvars = c("cyclic")) %>% 
+  mutate(cyclic=factor(cyclic,
+                            levels=c("acyclic","cyclic"),
+                            labels=c("Acyclic","Cyclic")))%>%
+  ggplot(aes(x=cyclic,y=md,fill=cyclic))+
+  geom_bar(stat="identity",color="black")+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Accuracy")+
+  ggtitle("Event-based")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+
+pic=pic %>% mutate(lin_name= c("AB","AC","BC","AD","BD","CD")[lin])
+lis1=which(paste(pic$str,pic$lin_name,pic$choi,sep="_") %in% 
+paste(pic2$trLabel[lis],pic2$choi[lis],sep="_"))
+
+
+p3=pic[lis1,] %>% 
+  summarySE(measurevar = "md",groupvars = c("cyclic")) %>% 
+  mutate(cyclic=factor(cyclic,
+                            levels=c("acyclic","cyclic"),
+                            labels=c("Acyclic","Cyclic")))%>%
+  ggplot(aes(x=cyclic,y=md,fill=cyclic))+
+  geom_bar(stat="identity",color="black")+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Accuracy")+
+  ggtitle("Rate-based")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+p1|p2|p3
+ggsave(file="act_acc.pdf",width = 9,height = 3.6)
+```

@@ -1,0 +1,294 @@
+# loading
+```{r}
+library(Rmisc)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(parallel)
+library(matrixStats)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+source("fun_earthquake.R")
+```
+
+```{r}
+load("data_earthquake.Rda")
+sti$time=as.numeric(sti$time)/60
+sti$group_id=sapply(strsplit(sti$trial_id,"_"),"[",3) %>%as.numeric()
+#change the time from second*hz to second
+
+# x=sti %>% 
+#   group_by(trial_id,Delay)%>%
+#   dplyr::summarise(t=max(time))
+# 
+# mean(x$t[x$Delay=="short"]) %>% round
+# sd(x$t[x$Delay=="short"])%>% round
+# mean(x$t[x$Delay=="long"])%>% round
+# sd(x$t[x$Delay=="long"])%>% round
+
+#make a backup
+sti.raw=sti
+```
+
+
+```{r}
+sti1=sti %>% subset(Delay=="short" & PoIE=="high")
+sti2=sti %>% subset(Delay=="long" & PoIE=="high")
+
+clis1=c()
+for (k in unique(sti1$trial_id)){
+  sqc=sti1 %>% subset(trial_id==k)
+  aflag=0
+  cl=c()
+  for (i in which(sqc$obj=="A")[1] :nrow(sqc)){
+    if (sqc$obj[i]=="A"){p=0;aflag=1}
+    if (sqc$obj[i]%in% c("B","C")){p=p+1}
+    if (sqc$obj[i]=="E" & aflag==1){cl=c(cl,p);p=0;aflag=0}
+  }
+  clis1=c(clis1,mean(cl))
+}
+
+clis2=c()
+for (k in unique(sti2$trial_id)){
+  sqc=sti2 %>% subset(trial_id==k)
+  aflag=0
+  cl=c()
+  for (i in which(sqc$obj=="A")[1] :nrow(sqc)){
+    if (sqc$obj[i]=="A"){p=0;aflag=1}
+    if (sqc$obj[i]%in% c("B","C")){p=p+1}
+    if (sqc$obj[i]=="E" & aflag==1){cl=c(cl,p);p=0;aflag=0}
+  }
+  clis2=c(clis2,mean(cl))
+}
+```
+
+
+#event-based model
+
+the assumption that participants may not know but we assume they know
+1. one wave only causes one earthquake
+<!-- 2. the cause would only succeed at 80% -->
+```{r}
+myMech<- function(tr){
+  lis=list()
+  for (s in c("A","B","C")){
+    sqc=sti%>%subset(trial_id==tr & obj %in% c(s,"E")) %>% 
+      mutate(id=paste(obj,order,sep = ""))
+    
+    lis[[s]]=myEventBased(sqc)
+  }
+  save(lis,br,c_p,c_m,c_v,file = paste("earth/",tr,".Rda",sep=""))
+  return(lis)
+}
+```
+
+```{r}
+samp=10000#100000
+br=1/runif(samp,0,100)
+c_p=runif(samp,0,1) #causal power of the target cause
+c_m=runif(samp,0,100) #0 to 300 s 
+c_v=sapply(c_m^2, function(x){runif(1)*x})
+
+c_al=(c_m^2)/c_v
+c_bt=c_m/c_v
+par_lis=list("br"=br,"c_p"=c_p,"c_m"=c_m,"c_v"=c_v,"c_al"=c_al,"c_bt"=c_bt)
+```
+
+```{r}
+runlist=as.list(unique(sti$trial_id))
+# ffile=list.files("earth")
+# runlist=as.list(setdiff(unique(sti$trial_id),substr(ffile,1,nchar(ffile)-4)))
+md=mclapply(runlist,myMech,mc.cores=12)
+names(md)=unlist(runlist)
+save(md,par_lis,file="md_event_earth_10000.Rda")
+# myMech(runlist[[1]])
+```
+
+```{r}
+nlis=sapply(strsplit(names(md),"_"),"[[",1)
+
+tmp=lapply(md[which(nlis=="long")], function(x){unlist(x$A$G1)})
+m1=matrix(unlist(tmp), nrow = 10000)
+
+pic=data.frame(c_p=par_lis$c_p,prob=rowMeans(m1))
+
+pic %>% 
+  subset(c_p<8)%>%
+  ggplot(aes(x=c_p,y=prob))+
+  geom_line()
+```
+
+
+#rate model
+```{r}
+myType<- function(tr){
+  lis=list()
+  for (s in c("A","B","C")){
+    sqc=sti%>%subset(trial_id==tr & obj %in% c(s,"E")) %>% 
+      mutate(id=paste(obj,order,sep = ""))
+    
+    lis[[s]]=myRateBased(sqc)
+  }
+  # save(lis,br,c_p,c_m,c_v,file = paste("earth_poi/",tr,".Rda",sep=""))
+  return(lis)
+}
+```
+
+```{r}
+runlist=as.list(unique(sti$trial_id))
+md=mclapply(runlist,myType,mc.cores=12)
+names(md)=unlist(runlist)
+save(md,par_lis,file="md_rate_earth_10000.Rda")
+```
+
+
+#figure of the dataset
+```{r}
+p1=data.frame(condition=factor(c(1,2,3,4,1,2,3,4),labels = c("Short, High","Long, High","Short, Low","Long, Low")),
+           obj=rep(c("Cause","One Lure"),each=4),
+           probability=c(48,52,66,58,22,27,16,21),
+           se=c(3.0,3.9,4.8,4.5,3.0,3.9,2.1,2.4)) %>% 
+  ggplot(aes(x=condition,y=probability,fill=obj))+
+  geom_bar(stat="identity", position = position_dodge(width = 0.9),color="black")+
+  geom_errorbar(aes(ymin=probability-se,ymax=probability+se),
+                position = position_dodge(width = 0.9),width=0.2)+
+  theme_classic()+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Rating")+
+  ggtitle("Human")+
+  scale_y_continuous(limits = c(0,73))+
+  theme(legend.position = c(0.12,0.9),
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+```
+
+```{r}
+load("md_event_earth_10000.Rda")
+pic=data.frame()
+for (k in names(md)){
+  p=data.frame(trial_id=k,obj=c("A","B","C"),
+               md=sapply(md[[k]],"[[",1))%>%
+    mutate(probability=exp(md/10)/sum(exp(md/10)), #, #md/sum(md),
+           Delay=unlist(strsplit(k,"_"))[1],
+           PoIE=unlist(strsplit(k,"_"))[2],
+           group_id=unlist(strsplit(k,"_"))[3] %>%as.numeric(),
+           condition=paste(Delay,PoIE,sep="_"))%>%
+    mutate(condition=factor(condition,levels = c("short_high","long_high","short_low","long_low"),
+                            labels=c("Short, High","Long, High","Short, Low","Long, Low")))
+  pic=rbind(pic,p)
+}
+
+p2=pic %>%
+  summarySE(measurevar = "probability",groupvars = c("condition","obj"))%>%
+  ggplot(aes(x=condition,y=probability*100,fill=obj))+
+  geom_bar(stat="identity", position = position_dodge(width = 0.9),color="black")+
+  theme_classic()+
+  scale_fill_grey(start = 0.6,end=1,labels=c("Cause","Lure 1","Lure 2"))+
+  xlab("Condition")+
+  ylab("Log-likelihood Ratio")+
+  ggtitle("Event-based")+
+  scale_y_continuous(limits = c(0,73))+
+  theme(legend.position = c(0.1,0.9),
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+```
+
+
+```{r}
+load("md_rate_earth_10000.Rda")
+pic=data.frame()
+for (k in names(md)){
+  p=data.frame(trial_id=k,obj=c("A","B","C"),
+               md=sapply(md[[k]],"[[",1))%>%
+    mutate(probability=exp(md/10)/sum(exp(md/10)), #, #md/sum(md),
+           Delay=unlist(strsplit(k,"_"))[1],
+           PoIE=unlist(strsplit(k,"_"))[2],
+           group_id=unlist(strsplit(k,"_"))[3] %>%as.numeric(),
+           condition=paste(Delay,PoIE,sep="_"))%>%
+    mutate(condition=factor(condition,levels = c("short_high","long_high","short_low","long_low"),
+                            labels=c("Short, High","Long, High","Short, Low","Long, Low")))
+  pic=rbind(pic,p)
+}
+
+p3=pic %>%
+  summarySE(measurevar = "probability",groupvars = c("condition","obj"))%>%
+  ggplot(aes(x=condition,y=probability*100,fill=obj))+
+  geom_bar(stat="identity", position = position_dodge(width = 0.9),color="black")+
+  theme_classic()+
+  scale_fill_grey(start = 0.6,end=1,labels=c("Cause","Lure 1","Lure 2"))+
+  xlab("Condition")+
+  ylab("Log-likelihood Ratio")+
+  ggtitle("Rate-based")+
+  scale_y_continuous(limits = c(0,73))+
+  theme(legend.position = c(0.1,0.9),
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+  
+```
+
+
+```{r}
+p1|p2|p3
+ggsave(file="earthquake.pdf",width = 18,height = 4.5)
+```
+
+
+```{r}
+# fl=list.files("./earth")
+# md=list()
+# for (k in fl){
+#   load(paste("earth/",k,sep=""))
+#   nam=unlist(strsplit(k,"[.]"))[1]
+#   md[[nam]]=lis
+# }
+```
+
+
+```{r}
+# 
+# pic=data.frame()
+# for (k in names(md)){
+#   p=data.frame(trial_id=k,obj=c("A","B","C"),
+#                md=unlist(md[[k]]))%>%
+#     mutate(probability=md/sum(md),
+#            Delay=unlist(strsplit(k,"_"))[1],
+#            PoIE=unlist(strsplit(k,"_"))[2],
+#            group_id=unlist(strsplit(k,"_"))[3] %>%as.numeric(),
+#            condition=paste(Delay,PoIE,sep="_"))%>%
+#     mutate(condition=factor(condition,levels = c("short_high","short_low","long_high","long_low")))
+#   pic=rbind(pic,p)
+# }
+```
+
+```{r}
+# nlis=sapply(strsplit(names(md),"_"),"[[",1)
+# 
+# tmp=lapply(md[which(nlis=="long")], function(x){unlist(x$A$G1)})
+# m1=matrix(unlist(tmp), nrow = 10000)
+# 
+# pic=data.frame(c_p=par_lis$c_p,prob=rowMeans(m1))
+# 
+# pic %>% 
+#   subset(c_p<8)%>%
+#   ggplot(aes(x=c_p,y=prob))+
+#   geom_line()
+```

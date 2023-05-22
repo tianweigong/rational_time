@@ -1,0 +1,486 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# loading
+```{r}
+library(dplyr)
+library(parallel)
+library(ggplot2)
+library(gridExtra)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+source("fun_computer.R")
+```
+
+```{r}
+l_o=c("A","B","C","D")
+
+load("DBN.Rda")
+valid_link=c("AB"=5,"AC"=9,"AD"=13,"BD"=14,"DB"=8,"BC"=10,"CB"=7,"DC"=12,"CD"=15) #c("AB","AC","AD","BD","DB","BC","CB","DC","CD")
+
+DBN=DBN4
+for (k in dim(DBN)[3]:2){#remove some structures that cannot be chosen in the experiment
+  tmp=DBN[,,k]
+  if (prod( which(tmp==1) %in% valid_link)==0){
+    DBN=DBN[,,-k]
+  }
+}
+#the ground structure: 30
+
+cau_fr=expand.grid(c(0,1),c(0),c(0,1),c(0,1)) %>%
+  rbind(expand.grid(c(0,1),c(0,1),c(0),c(0,1)) )%>%
+   rbind(expand.grid(c(0,1),c(0,1),c(0,1),c(0)))
+
+eff_fr=rep(c("B","C","D"),each=8)
+
+sqc_lis=list(
+  #condition 2
+  S1=data.frame(time=c(1,2,3,4)-0.5,obj=c("A","B","D","C")),
+  S2=data.frame(time=c(1,2,4)-0.5,obj=c("A","B","C")),
+  S3=data.frame(time=c(1,2,3)-0.5,obj=c("A","B","D")),
+  S4=data.frame(time=c(1,2)-0.5,obj=c("A","B")),
+  S5=data.frame(time=c(1)-0.5,obj=c("A")),
+  #condition 3 (and S4 and S5)
+  S6=data.frame(time=c(1,2,3,4)-0.5,obj=c("A","D","C","B")),
+  S7=data.frame(time=c(1,3,4)-0.5,obj=c("A","C","B")),
+  S8=data.frame(time=c(1,2,4)-0.5,obj=c("A","D","B")),
+  S9=data.frame(time=c(1,4)-0.5,obj=c("A","B")),
+  #condition 4 (and S2,3,4,5)
+  S10=data.frame(time=c(1,2,3,3)-0.5,obj=c("A","B","C","D")),
+  S11=data.frame(time=c(1,2,3)-0.5,obj=c("A","B","C")),
+  S12=data.frame(time=c(1,2,3)-0.5,obj=c("A","B","D"))
+)
+
+# sti=list(
+#   cond2=data.frame(sqc_id=c("S1","S2","S3","S4","S5"),
+#                    rp=c(51,13,13,3,20)),
+#   cond3=data.frame(sqc_id=c("S6","S7","S8","S9","S5"),
+#                    rp=c(51,13,13,3,20)),
+#   cond4=data.frame(sqc_id=c("S10","S11","S12","S4","S5"),
+#                    rp=c(51,13,13,3,20))
+# )
+
+# evi=round(20* c(51,13,13,3,20)/100)
+evi=c(51,13,13,3,20)
+# evi=rep(1,5)
+sti=list(
+  cond2=data.frame(sqc_id=c("S1","S2","S3","S4","S5"),
+                   rp=evi),
+  cond3=data.frame(sqc_id=c("S6","S7","S8","S9","S5"),
+                   rp=evi),
+  cond4=data.frame(sqc_id=c("S10","S11","S12","S4","S5"),
+                   rp=evi)
+)
+
+# dt=expand.grid(link=c("AB","AC","AD","BD","DB","BC","CB","DC","CD"),
+#                cond=c("cond2","cond3","cond4"))%>%
+#   mutate(ppl=c(.96,.17,.13,.79,.38,.96,.46,.83,.21,
+#                .58,.88,.54,.21,.79,.38,.50,.71,.33,
+#                .92,.29,.33,.79,.50,.88,.46,.21,.29
+#                ))
+
+dt=expand.grid(link=c("AB","AC","AD","BC","BD","CB","CD","DB","DC"),
+               cond=c("cond2","cond3","cond4"))%>%
+  mutate(ppl=c(.96,.13,.17,.79,.96,.38,.21,.46,.83,
+               .58,.54,.88,.21,.38,.79,.33,.50,.71,
+               .92,.33,.29,.79,.88,.50,.29,.46,.21
+               ))
+
+mycut=seq(0,4,by=1) 
+```
+
+# rate-based model
+```{r}
+myReshape<-function(sqc,eff,cau){
+  d=list()
+  
+  dr=cut(sqc[which(sqc$obj==eff),"time"], breaks =mycut) %>% table() %>% as.numeric()
+  for (k in 1:length(dr)){
+    l=list("gen"=c(),"rate"=c())
+    l[["rate"]][eff]=dr[k]
+    if (length(cau)){
+      for (m in 1:length(cau)){
+        tmp=sqc %>% subset(obj%in% cau[m] & time< mycut[k]) #time< mycut[k+1]
+        if (nrow(tmp)>0){l[["gen"]][cau[m]]=k-tmp$time}
+      }
+    }
+    d[[k]]=l
+  }
+  return(d)
+}
+
+myLinkLi<-function(l){
+  li=l[[1]]
+  sq=l[[2]]
+  # s=max(sq)
+  s=max( sq[which(li!=0)])
+  
+  re=as.list(c(1:length(valid_link))) %>% lapply(function(x){rep(0,2)})
+  for (k in 1:dim(DBN)[3]){
+    if (li[k]==0 || is.na(li[k])){next}
+    tmp=DBN[,,k]
+    for (m in 1:length(valid_link)){
+      if (tmp[valid_link[m]]==0){
+        re[[m]][1]=re[[m]][1]+li[k]*(10^(sq[k]-s))
+      }else{
+        re[[m]][2]=re[[m]][2]+li[k]*(10^(sq[k]-s))
+      }
+    }
+  }
+  names(re)=names(valid_link)
+  re
+}
+
+myRed<-function(l,n){
+    l.dec=-ceiling(log(l,base=10))
+    
+    if (is.infinite(10^l.dec)){return(list(0,0))}
+    
+    l2=(l*10^l.dec)^n
+    l2.dec=-ceiling(log(l2,base=10))
+    if (is.infinite(10^l2.dec)){return(list(0,0))}
+    
+    r1=l2*10^l2.dec
+    r2=l.dec*n+l2.dec
+    return(list(r1,r2))
+}
+
+
+myType<-function(cond){
+  li.all=sq.all=rep(NA,dim(DBN)[3])
+  # li.all=sq.all=rep(0,dim(DBN)[3])
+  
+  mysti=sti[[cond]]
+  
+  mybigli=matrix(1,nrow=length(eff_fr),ncol=samp)
+  mybigsq=matrix(0,nrow=length(eff_fr),ncol=samp)
+  for (k in 1:length(eff_fr)){
+    for (m in 1: samp){
+       par=par_lis[[m]]
+       for (tr in 1:nrow(mysti)){
+         sqc=sqc_lis[[mysti$sqc_id[tr]]] %>% myReshape(eff_fr[k],l_o[which(cau_fr[k,]==1)])
+         re=myRed(myRate(sqc,par),mysti$rp[tr])
+         mybigli[k,m]=mybigli[k,m]*re[[1]]
+         mybigsq[k,m]=mybigsq[k,m]+re[[2]]
+         if (mybigli[k,m]==0){break}
+       }
+    }
+  }
+
+  for (s in 1:dim(DBN)[3]){
+    li=1;sq=0
+    for (o in 2:length(l_o)){
+      pos=intersect(which(eff_fr==l_o[o]),which(apply(cau_fr,1,function(x){prod(x==DBN[,o,s])})==1))
+      li=li*mybigli[pos,]
+      sq=sq+mybigsq[pos,]
+    }
+    li.all[[s]]=mean(li*10^(min(sq[li!=0])-sq),na.rm = T) #max(sq[li!=0],0) in case all are 0
+    sq.all[[s]]=-min(sq[li!=0])
+  }
+  return(list("li"=li.all,"sq"=sq.all))
+}
+```
+
+```{r}
+samp=10000
+# lam0=rep(1e-3,samp)
+lam0=rep(0,samp)
+# lam1=1/runif(samp,0,10)
+lam1=rep(0.8,samp)
+
+# mu=lapply(as.list(1:samp),function(x){y=runif(9,0,10);names(y)=c("AB","CB","DB","AC","BC","DC","AD","BD","CD");y})
+
+mu=lapply(as.list(1:samp),function(x){y=rep(runif(1,0,10),9);names(y)=c("AB","CB","DB","AC","BC","DC","AD","BD","CD");y})
+
+va=lapply(mu,function(x){sapply(x,function(x){runif(1,0,x^2)})})
+
+
+par_lis=lapply(as.list(1:samp),function(x){c("lam0"=lam0[x],"lam1"=lam1[x],
+                                             "alpha"=(mu[[x]]^2)/va[[x]],
+                                             "beta"=mu[[x]]/va[[x]])})
+
+# runlist=as.list(c("cond2","cond3","cond4"))
+# t0=Sys.time()
+# md=mclapply(runlist,myType,mc.cores=3)
+# names(md)=unlist(runlist)
+# Sys.time()-t0
+# save(md,par_lis,file="md_rate_comput.Rda")
+```
+
+```{r}
+load("md_rate_comput.Rda")
+md.link=lapply(md,myLinkLi)
+
+dt$md=NA
+for (k in 1:nrow(dt)){
+  li=md.link[[as.character(dt$cond[k])]][[as.character(dt$link[k])]]
+  dt$md[k]=exp(log(li[2]))/sum(exp(log(li)))
+}
+
+mySF<-function(sf,vals){
+  dt$md=NA
+  for (k in 1:nrow(dt)){
+    li=md.link[[as.character(dt$cond[k])]][[as.character(dt$link[k])]]
+    dt$md[k]=exp(log(li[2])/sf)/sum(exp(log(li)/sf))
+  }
+  # 1-cor(dt$md,dt$ppl)
+  -sum(log(dt$md)*dt$ppl)
+}
+
+x=optim(10,mySF,vals=dt,method ="Brent", upper = 1000,lower = 0)
+
+dt$md_sf=NA
+for (k in 1:nrow(dt)){
+  li=md.link[[as.character(dt$cond[k])]][[as.character(dt$link[k])]]
+  dt$md_sf[k]=exp(log(li[2])/116.2272)/sum(exp(log(li)/116.2272))
+}
+```
+
+```{r}
+p1=dt %>%
+  mutate(cor="r = .67")%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=cond,shape=cond),size=3)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Condition 2","Condition 3","Condition 4"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Condition 2","Condition 3","Condition 4"))+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+
+cor(dt$md_sf,dt$ppl,method = "spearman")
+```
+
+```{r}
+p2=dt %>%
+  mutate(cor="rho*' = .73'")%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  scale_x_continuous(limits = c(0,26.7),breaks = c(0,5,10,15,20,25))+
+  scale_y_continuous(limits = c(0,26.7),breaks =  c(0,5,10,15,20,25))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=cond,shape=cond),size=3)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Condition 2","Condition 3","Condition 4"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Condition 2","Condition 3","Condition 4"))+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=2.5, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(dt$md_sf,dt$ppl,method = "spearman")
+```
+
+
+
+
+#delay model
+```{r}
+myMech<-function(cond){
+  li.all=sq.all=rep(NA,dim(DBN)[3])
+  mysti=sti[[cond]]
+  
+  mybigli=matrix(1,nrow=length(eff_fr),ncol=samp)
+  mybigsq=matrix(0,nrow=length(eff_fr),ncol=samp)
+  
+  for (m in 1: samp){
+    for (k in 1:length(eff_fr)){
+       par=par_lis[[m]]
+       for (tr in 1:nrow(mysti)){
+         sqc=sqc_lis[[mysti$sqc_id[tr]]] #%>% myReshape(eff_fr[k],l_o[which(cau_fr[k,]==1)])
+         cau=intersect(l_o[which(cau_fr[k,]==1)],sqc$obj)
+         
+         if (sum(sqc$obj==eff_fr[k])==0 & length(cau)==0){next}
+            if (sum(sqc$obj==eff_fr[k])==0 & length(cau)>0){
+              re=myRed(0.2^length(cau),mysti$rp[tr])
+              
+              mybigli[k,m]=mybigli[k,m]*re[[1]]
+              mybigsq[k,m]=mybigsq[k,m]+re[[2]]
+              next
+            }
+         if (length(cau)==0){mybigli[k,m]=0;break}
+         
+         ll=0
+         for (p in 1:length(cau)){
+            t_c=sqc$time[which(sqc$obj==cau[p])]
+            t_e=sqc$time[which(sqc$obj==eff_fr[k])]
+            del=t_e-t_c
+            l=dgamma(del,par["alpha"],par["beta"])*0.8
+            # cau_rest=sqc$time[intersect(which(sqc$obj %in% setdiff(cau,cau[p])),which(sqc$time<t_e))]
+            # if (length(cau_rest)>0){l=l*prod(0.2+0.8*pgamma(del,par["alpha"],par["beta"],lower.tail = F)) }
+            ll=ll+l
+          }
+
+          re=myRed(ll,mysti$rp[tr])
+            
+          mybigli[k,m]=mybigli[k,m]*re[[1]]
+          mybigsq[k,m]=mybigsq[k,m]+re[[2]]
+         
+          if (mybigli[k,m]==0){break}
+       }
+       if (mybigli[k,m]==0){next}
+    }
+  }
+  
+  for (s in 1:dim(DBN)[3]){
+    li=1;sq=0
+    for (o in 2:length(l_o)){
+      pos=intersect(which(eff_fr==l_o[o]),which(apply(cau_fr,1,function(x){prod(x==DBN[,o,s])})==1))
+      li=li*mybigli[pos,]
+      sq=sq+mybigsq[pos,]
+    }
+    if (sum(li)==0){li.all[[s]]=0;sq.all[[s]]=0;next}
+    li.all[[s]]=mean(li*10^(min(sq[li!=0])-sq),na.rm = T) #max(sq[li!=0],0) in case all are 0
+    sq.all[[s]]=-min(sq[li!=0])
+  }
+
+  return(list("li"=li.all,"sq"=sq.all))
+}
+```
+
+
+```{r}
+samp=10000
+mu=runif(samp,0,10)
+va=sapply(mu,function(x){runif(1,0,x^2)})
+
+par_lis=lapply(as.list(1:samp),function(x){c("alpha"=(mu[x]^2)/va[x],"beta"=mu[x]/va[x])})
+
+# runlist=as.list(c("cond2","cond3","cond4"))
+# md=mclapply(runlist,myMech,mc.cores=3)
+# names(md)=unlist(runlist)
+# save(md,par_lis,file="md_event_comput.Rda")
+```
+
+```{r}
+load("md_event_comput.Rda")
+md.link=lapply(md,myLinkLi)
+
+dt2=dt
+dt2$md=NA
+for (k in 1:nrow(dt2)){
+  li=md.link[[as.character(dt2$cond[k])]][[as.character(dt2$link[k])]]
+  dt2$md[k]=exp(log(li[2]))/sum(exp(log(li)))
+}
+
+mySF<-function(sf,vals){
+  vals$md=NA
+  for (k in 1:nrow(vals)){
+    li=md.link[[vals$cond[k]]][[vals$link[k]]]
+    vals$md[k]=exp(log(li[2])/sf)/sum(exp(log(li)/sf))
+  }
+  # cor(vals$md,vals$ppl)
+  -sum(log(vals$md)*round(vals$ppl*24))
+}
+
+x=optim(100,mySF,vals=dt2,method ="Brent", upper = 1000,lower = 0)
+
+
+dt2$md_sf=NA
+for (k in 1:nrow(dt2)){
+  li=md.link[[as.character(dt2$cond[k])]][[as.character(dt2$link[k])]]
+  dt2$md_sf[k]=exp(log(li[2])/101.457)/sum(exp(log(li)/101.457))
+}
+```
+
+
+```{r}
+p3=dt2 %>%
+  mutate(cor="r = .86")%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=cond,shape=cond),size=3)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Condition 2","Condition 3","Condition 4"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Condition 2","Condition 3","Condition 4"))+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(dt2$md_sf,dt2$ppl)
+```
+
+```{r}
+p4=dt2 %>%
+  mutate(cor="rho*' = .89'")%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  scale_x_continuous(limits = c(0,26.7),breaks = c(0,5,10,15,20,25))+
+  scale_y_continuous(limits = c(0,26.7),breaks =  c(0,5,10,15,20,25))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=cond,shape=cond),size=3)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Condition 2","Condition 3","Condition 4"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Condition 2","Condition 3","Condition 4"))+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=2.5, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(dt2$md_sf,dt2$ppl,method = "spearman")
+```
+
+```{r}
+p3|p1
+ggsave(file="comp_pearson.pdf",width = 9,height = 4)
+p4|p2
+ggsave(file="comp_spearman.pdf",width = 9,height = 4)
+```
+

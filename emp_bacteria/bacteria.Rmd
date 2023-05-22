@@ -1,0 +1,175 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# loading
+```{r}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(Rmisc)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+source("fun_becteria.R")
+dt=read.csv("data_GnB.csv") %>% 
+  mutate(exp1n2=(exp2_mean+exp2_mean)/2
+         )
+
+n_day=5
+n_num=40
+```
+
+## gamma decay
+```{r}
+samp=10000
+lam0=runif(samp,0,40)
+lam1=runif(samp,0,40)
+pi1=runif(samp,0,1)
+mu=runif(samp,0,5) #decay mu
+va=sapply(mu,function(x){runif(1,0,x^2)})
+```
+
+```{r}
+mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+
+for (k in 1:nrow(dt)){
+  eg=dt[k,paste("day",1:5,sep="")] %>% as.numeric() 
+  cg=dt[k,paste("day",1:5,"_c",sep="")] %>% as.numeric()
+
+  mysam=mat %>% apply(1,myType)%>%
+    rowMeans(na.rm = T)
+  
+  dt$rate_gamma[k]=log(mysam[2])-log(mysam[1])
+}
+```
+
+
+```{r}
+optim(par=c(1),function(x,y,par){x=sign(x)*(abs(x)^par);-cor(x,y)},x= dt$rate_gamma,y=dt$exp1n2,method = "Brent",upper = 30,lower = -30)
+
+cor(sign(dt$rate_gamma)*(abs(dt$rate_gamma))^0.5094413,dt$exp1n2)
+cor(dt$rate_gamma,dt$exp1n2)
+cor(dt$rate_gamma,dt$exp1n2,method = "spearman")
+```
+
+```{r}
+p1=dt %>%
+  mutate(x=-sign(rate_gamma)*(abs(rate_gamma))^0.4906598,
+         y=-exp1n2)%>%
+  mutate(cor="r = .96")%>%
+  ggplot(aes(x=x,y=y))+
+  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  geom_hline(yintercept = 0,linetype="dashed",color="gray")+
+  geom_point(size=2,color=alpha("#4DAF4A",.9),shape=15)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=-2, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+p2=dt %>%
+  mutate(x=rank(-sign(rate_gamma)*(abs(rate_gamma))^0.4906598),
+         y=rank(-exp1n2))%>%
+  mutate(cor="rho*' = .97'")%>%
+  ggplot(aes(x=x,y=y))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(size=2,color=alpha("#4DAF4A",.9),shape=15)+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black",parse = TRUE, x=3, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+p1|p2
+ggsave(file="bac_cor.pdf",width = 10,height = 4)
+```
+
+```{r}
+p1=dt %>% 
+  subset(contiguity!="random"&delta.P==0)%>%
+  summarySE(measurevar = "exp1n2",groupvars = "contiguity")%>%
+  mutate(condition=factor(contiguity,
+                          levels=c("strong","weak"),
+                          labels=c("Decreasing","Increasing")
+                          ))%>%
+  ggplot(aes(x=condition,y=-exp1n2,fill=condition,group=1))+
+  geom_hline(yintercept = 0,linetype="dashed",color="gray")+
+  geom_line()+
+  geom_point(size=3)+
+  scale_y_continuous(limits = c(-100,100))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Trend")+
+  ylab("Harmful")+
+  ggtitle("Human")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+```
+
+```{r}
+p2=dt %>% 
+  subset(contiguity!="random"&delta.P==0)%>%
+  summarySE(measurevar = "rate_gamma",groupvars = "contiguity")%>%
+  mutate(condition=factor(contiguity,
+                          levels=c("strong","weak"),
+                          labels=c("Decreasing","Increasing")
+                          ))%>%
+  ggplot(aes(x=condition,y=-rate_gamma,fill=condition,group=1))+
+  geom_hline(yintercept = 0,linetype="dashed",color="gray")+
+  geom_line()+
+  geom_point(size=3)+
+  scale_y_continuous(limits = c(-5,5))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Trend")+
+  ylab("Log-likelihood")+
+  ggtitle("Rate-based")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+```
+
+```{r}
+p1|p2
+ggsave(file="bac_rating.pdf",width = 9,height = 3.3)
+```
+

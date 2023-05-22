@@ -1,0 +1,145 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gridExtra)
+library(RColorBrewer)
+set.seed(2)
+```
+
+```{r}
+myPic<-function(ty="prob"){
+  n=length(lis)
+  pic=data.frame(time=seq(0,7,length.out=300))
+  mylabel=rep(NA,n)
+  for (k in 1: n){
+    a=lis[[k]][1]
+    b=lis[[k]][2]
+
+    if (ty=="size"){
+       pic[paste(k)]=dgamma(pic$time,a,b)/dgamma((a-1)/b,a,b)
+    }else{
+      pic[paste(k)]=dgamma(pic$time,a,b)
+    }
+                         
+
+    # mylabel[k]=paste("\u03B1=",lis[[k]][1],", \u03B2=",lis[[k]][2],sep="")
+    mylabel[k]=as.expression(bquote(alpha~"="~.(lis[[k]][1])~", "~beta~"="~.(lis[[k]][2])))
+  }
+  
+  pic %>% gather(key="key",value="value", paste(c(1:n)))%>%
+    mutate(key=factor(key,levels = paste(c(1:n)))) %>%
+    ggplot(aes(x=time,y=value,color=key))+
+    geom_line(linewidth=1.5)+
+    theme_classic()+
+    scale_color_manual(values=alpha(c("#E41A1C","#377EB8","#4DAF4A","black","#FF7F00"),0.7),labels=mylabel)+
+    theme(legend.position = c(0.8,0.8),
+          axis.text=element_text(size=14),
+          axis.title = element_text(face="bold"),
+          legend.title=element_blank(),
+          legend.background = element_rect(fill='transparent'),
+          legend.text.align = 0)
+}
+
+brewer.pal(n=9,"Set1")
+# values=c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+#"#E41A1C" "#377EB8" "#4DAF4A" "#984EA3" "#FF7F00" "#FFFF33" "#A65628" "#F781BF" "#999999"
+```
+
+```{r}
+lis=list(c(1,.6),c(1,0.9),c(6,3),c(60,15),c(6,1))
+myPic("prob")+ylab("Probability Density")+xlab("Time")
+
+ggsave(file="f1.pdf",width = 5,height = 3.5)
+```
+
+```{r}
+lis=list(c(1,.6),c(1,0.9),c(6,3),c(60,15),c(6,1))
+myPic("size")+
+  ylab("Effect Size")+
+  xlab("Time")+
+  scale_y_continuous(breaks = 1,labels = "Max \n Level")+
+  geom_hline(yintercept = 1,linetype="dashed")+
+  theme(axis.ticks.y=element_blank())+
+  theme(axis.ticks.y=element_blank(),
+        legend.position = c(0.86,0.4)
+        )
+
+ggsave(file="f2.pdf",width = 5,height = 3.5)
+```
+
+
+```{r}
+myPic2<-function(ty="prob",pic=pic){
+  n=length(lis)
+  mylabel=rep(NA,n)
+  for (k in 1: n){
+    a=lis[[k]][1]
+    b=lis[[k]][2]
+
+    if (ty=="size"){
+       pic[paste(k)]=dgamma(pic$time,a,b)/dgamma((a-1)/b,a,b)
+    }else{
+      pic[paste(k)]=dgamma(pic$time,a,b)
+    }
+                         
+    # mylabel[k]=paste("\u03B1=",lis[[k]][1],", \u03B2=",lis[[k]][2],sep="")
+    mylabel[k]=as.expression(bquote(mu~"="~.(lis[[k]][1]/lis[[k]][2])~", "~sigma^2~"="~.(lis[[k]][1]/(lis[[k]][2])^2)~" ("~alpha~"="~.(lis[[k]][1])~")"))
+  }
+  
+  p=pic %>% gather(key="key",value="value", paste(c(1:n)))%>%
+    mutate(key=factor(key,levels = paste(c(1:n)))) 
+  p2=p %>% subset(time %in% c(2,6))
+  
+  p%>%
+    ggplot(aes(x=time,y=value,color=key))+
+    geom_line(linewidth=1.2)+
+    geom_line(data=p2,aes(x=time,y=value,color=key),linetype="dashed")+
+    geom_point(data=p2,aes(x=time,y=value,color=key),size=2.5)+
+    theme_classic()+
+    scale_color_manual(values=alpha(c("#E41A1C","#377EB8","#4DAF4A","#984EA3","#FF7F00"),0.7),labels=mylabel)+
+    # scale_color_manual(values=alpha(c("#E41A1C"),seq(0.2,1,0.2)),labels=mylabel)+
+    theme(legend.position = c(0.8,0.8),
+          axis.text=element_text(size=14),
+          axis.title = element_text(face="bold"),
+          legend.title=element_blank(),
+          legend.background = element_rect(fill='transparent'),
+          legend.text.align = 0)
+}
+
+myM2A<-function(m,v){
+  al=m^2/v
+  bt=m/v
+  c(al,bt)
+}
+
+lis=list(myM2A(4,8),myM2A(4,4),myM2A(4,2),myM2A(4,1)) 
+pic=data.frame(time=seq(0,7.9,length.out=79*2+1))
+myPic2("prob",pic)+ylab("Probability Density")+xlab("Time")+
+  scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8))+
+   annotate("rect", xmin = 0, xmax = 4, ymin = 0, ymax = 0.45,
+           alpha = .1,fill = "black")
+
+ggsave(file="f_short.pdf",width = 5,height = 3.5)
+```
+
+```{r}
+data.frame(time=seq(1,9,length.out= 20))%>%
+  mutate(prob=dgamma(time,10,2))%>%
+  ggplot(aes(x=time,y=prob))+
+  geom_bar(stat="identity",fill=alpha("#FF968D",0.42))+
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none",
+          panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),plot.background=element_blank())
+ggsave(file="f_gam.pdf",width = 15,height = 2)
+```

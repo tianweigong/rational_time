@@ -1,0 +1,365 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# loading
+```{r}
+library(dplyr)
+library(parallel)
+library(Rmisc)
+library(ggplot2)
+library(gridExtra)
+library(ggrepel)
+set.seed(2)
+```
+
+```{r}
+load("exp3.rdata")
+load("exp4.rdata")
+e6.l=e6.l %>% filter(dev_type!="fork2rev") %>% mutate(exp="exp3")
+e7.l=e7.l %>% filter(dev_type!="fork2rev") %>% mutate(exp="exp4")
+
+dt.sti=data.frame()
+for (k in 1:12){
+  co=c("dev_type",paste("clip",k,sep=""),paste("A",k,sep=""),paste("B",k,sep=""),"exp")
+  dt=rbind(e6.l[,co],e7.l[,co])
+    
+  colnames(dt)=c("dev_type","clip_id","A","B","exp")
+  
+  dt.sti=rbind(dt.sti,filter(dt,A-B<0))
+}
+dt.sti=dt.sti[!duplicated(dt.sti),] %>% 
+  mutate(uni_id=paste(exp,dev_type,sep="_"),
+         A=A/1000,
+         B=B/1000
+         )
+
+dt.ans=rbind(
+  select(e6.l,c("id","trial","dev_type","chain_resp2","exp")),
+  select(e7.l,c("id","trial","dev_type","chain_resp2","exp"))
+)%>%
+  mutate(uni_id=paste(exp,dev_type,sep="_"))
+```
+
+# event-based model
+```{r}
+MyEB_chain<- function(pa,sqc){
+  prod(dgamma(sqc$B-sqc$A,pa[1],pa[2]))
+}
+
+MyEB_fork<- function(pa,sqc){
+  prod(dgamma(sqc$B,pa[1],pa[2]))
+}
+```
+
+```{r}
+samp=10000
+mu=runif(samp,0,10)
+va=sapply(mu,function(x){runif(1,0,x^2)})
+# al=(mu^2)/va
+# bt=mu/va
+
+# mu=rexp(samp,0.0001)
+# al=rexp(samp,0.1)+1
+# bt=al/mu
+
+par=cbind(al=(mu^2)/va, bt=mu/va)
+
+t0=Sys.time()
+likeli_eb=split(dt.sti,dt.sti$uni_id) %>%
+  lapply(
+    function(x){
+      li_c=mean(apply(par,1,MyEB_chain,sqc=x))
+      li_f=mean(apply(par,1,MyEB_fork,sqc=x))
+      
+      c(li_c,li_f)
+    }
+  )
+Sys.time()-t0
+```
+
+```{r}
+dt=dt.ans %>%
+  summarySE(measurevar ="chain_resp2",groupvars = c("uni_id","id"))%>%
+  summarySE(measurevar ="chain_resp2",groupvars = c("uni_id"))%>%
+  mutate(type=ifelse(uni_id %in% c("exp3_chain1","exp3_chain2","exp4_chain1","exp4_chain2","exp4_chain3","exp4_chain4"),"Chain","Fork" ))%>%
+  mutate(type=factor(type,levels=c("Chain","Fork")),
+         ppl=chain_resp2)
+
+mySF<-function(sf,vals){
+  vals$md_sf=NA
+  for (k in unique(vals$uni_id)){
+      idx=which(vals$uni_id==k)
+      li=likeli_eb[[as.character(k)]]
+      tmp=log(li[1])-log(li[2])
+      vals$md_sf[idx]=sign(tmp)*abs(tmp)^sf
+  }
+  1-cor(vals$md_sf,vals$ppl)
+  
+  # -sum(log(vals$md_sf)*vals$ppl)
+}
+
+x=optim(10,mySF,vals=dt,method ="Brent", upper = 10,lower = 1e-10)
+
+
+for (k in unique(dt$uni_id)){
+    idx=which(dt$uni_id==k)
+    li=likeli_eb[[as.character(k)]]
+    tmp=log(li[1])-log(li[2])
+    dt$md[idx]=tmp
+    dt$md_sf[idx]=sign(tmp)*abs(tmp)^0.4822837
+}
+
+
+cor.test(dt$md_sf,dt$ppl)
+cor.test(dt$md,dt$ppl)
+
+cor.test(dt$md_sf,dt$ppl,method = "spearman")
+```
+
+
+```{r}
+p1=dt %>%
+  mutate(cor="r = .68")%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  # scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  # scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+  # geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+  geom_point(aes(color=type,shape=type),size=3)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human (Rating from 0 to 100)")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=-3, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+```
+
+```{r}
+p2=dt %>%
+  mutate(cor="rho*' = .73'")%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+  scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+  # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  # geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=type,shape=type),size=3)+
+  # geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+```
+
+
+# rate-based model
+```{r}
+myDecay<-function(th,t){
+  if (length(t)==0){return(0)}
+  s=th[1]
+  r=th[2]
+  dgamma(t,shape = s,rate=r)/dgamma((s-1)/r,shape = s,rate=r)
+}
+
+MyRate<-function(pa,cau,eff){
+  d=table(cut(eff,breaks =mycut))
+  decay=pmax(0,mycut[2:length(mycut)]-cau) %>% myDecay(pa[3:4],.)
+  
+  cbind(d,pa[1]+pa[2]*decay) %>%
+    apply(1, function(x){dpois(x[1],x[2])}) %>% prod()
+}
+
+MyRB_chain<-function(pa,sqc){
+  sqc %>% select(A,B)%>%
+    apply(1, function(x){prod(MyRate(pa,x[1],x[2]))})%>%
+    prod()
+}
+
+MyRB_fork<-function(pa,sqc){
+  sqc %>% select(A,B)%>%
+  apply(1, function(x){prod(MyRate(pa,0,x[2]))})%>%
+  prod()
+}
+```
+
+
+```{r}
+samp=10000
+# lam0=rep(1e-2,samp)
+lam0=rep(0,samp)
+# lam1=runif(samp,0,5)
+lam1=rep(1,samp)
+mu=runif(samp,0,10)
+va=sapply(mu,function(x){runif(1,0,x^2)})
+
+al=(mu^2)/va
+bt=mu/va
+
+par=cbind(lam0,lam1,al,bt)
+```
+
+```{r}
+win_len=0.3
+# win_len=0.3
+trial_end=3
+mycut=seq(0,trial_end,by=win_len)
+
+
+# t0=Sys.time()
+# likeli_rb=split(dt.sti,dt.sti$uni_id) %>%
+#   mclapply(
+#     function(x){
+#       li_c=mean(apply(par,1,MyRB_chain,sqc=x))
+#       li_f=mean(apply(par,1,MyRB_fork,sqc=x))
+# 
+#       c(li_c,li_f)
+#     },
+#     mc.cores = 12
+#   )
+# Sys.time()-t0
+
+# save(likeli_rb,file="likeli_rb.Rda")
+```
+
+```{r}
+load("likeli_rb.Rda")
+dt2=dt.ans %>%
+  summarySE(measurevar ="chain_resp2",groupvars = c("uni_id","id"))%>%
+  summarySE(measurevar ="chain_resp2",groupvars = c("uni_id"))%>%
+  mutate(type=ifelse(uni_id %in% c("exp3_chain1","exp3_chain2","exp4_chain1","exp4_chain2","exp4_chain3","exp4_chain4"),"Chain","Fork" ))%>%
+  mutate(type=factor(type,levels=c("Chain","Fork")),
+         ppl=chain_resp2)
+
+mySF<-function(sf,vals){
+  vals$md_sf=NA
+  for (k in unique(vals$uni_id)){
+      idx=which(vals$uni_id==k)
+      li=likeli_rb[[as.character(k)]]
+      tmp=log(li[1])-log(li[2])
+      vals$md_sf[idx]=sign(tmp)*abs(tmp)^sf
+  }
+  1-cor(vals$md_sf,vals$ppl)
+  
+  # -sum(log(vals$md_sf)*vals$ppl)
+}
+
+x=optim(10,mySF,vals=dt2,method ="Brent", upper = 10,lower = 1e-10)
+
+
+for (k in unique(dt2$uni_id)){
+    idx=which(dt2$uni_id==k)
+    li=likeli_rb[[as.character(k)]]
+    tmp=log(li[1])-log(li[2])
+    dt2$md[idx]=tmp
+    dt2$md_sf[idx]=sign(tmp)*abs(tmp)^0.2005549
+}
+
+
+cor.test(dt2$md_sf,dt2$ppl)
+cor.test(dt2$md,dt2$ppl)
+
+cor.test(dt2$md_sf,dt2$ppl,method = "spearman")
+```
+
+
+```{r}
+p3=dt2 %>%
+  mutate(cor="r = .81")%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  # scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  # scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+  # geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+  geom_point(aes(color=type,shape=type),size=3)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human (Rating from 0 to 100)")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=-1.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+```
+
+```{r}
+p4=dt2 %>%
+  mutate(cor="rho*' = .79'")%>%
+  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+  scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+  scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+  # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  # geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(aes(color=type,shape=type),size=3)+
+  # geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  ggtitle("Rate-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.85,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+```
+
+```{r}
+p1|p3
+ggsave(file="device_pearson.pdf",width = 9,height = 4)
+p2|p4
+ggsave(file="device_spearman.pdf",width = 9,height = 4)
+```
+

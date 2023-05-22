@@ -1,0 +1,367 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# loading
+```{r}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(Rmisc)
+set.seed(2)
+```
+
+```{r}
+source("fun_becteria.R")
+```
+
+```{r}
+#stimuli
+sti=list("A_inc"=list(),"A_dec"=list(),"B_inc"=list(),"B_dec"=list(),
+         "C_inc"=list(),"C_dec"=list(),"D_inc"=list(),"D_dec"=list(),
+         "E_inc"=list(),"E_dec"=list(),"F_inc"=list(),"F_dec"=list())
+
+sti[["A_inc"]][["exp"]]=c(0,1,1,3,5)
+sti[["A_inc"]][["ctr"]]=c(1,3,2,2,2)
+
+sti[["A_dec"]][["exp"]]=c(3,4,2,1,0)
+sti[["A_dec"]][["ctr"]]=c(2,2,1,2,3)
+
+sti[["B_inc"]][["exp"]]=c(1,2,2,4,5)
+sti[["B_inc"]][["ctr"]]=c(3,3,3,3,2)
+
+sti[["B_dec"]][["exp"]]=c(3,5,3,2,1)
+sti[["B_dec"]][["ctr"]]=c(2,3,3,3,3)
+
+sti[["C_inc"]][["exp"]]=c(0,0,0,0,3)
+sti[["C_inc"]][["ctr"]]=c(2,1,1,1,0)
+
+sti[["C_dec"]][["exp"]]=c(3,0,0,0,0)
+sti[["C_dec"]][["ctr"]]=c(1,0,1,1,2)
+
+sti[["D_inc"]][["exp"]]=c(0,0,0,1,4)
+sti[["D_inc"]][["ctr"]]=c(2,2,2,1,1)
+
+sti[["D_dec"]][["exp"]]=c(1,4,0,0,0)
+sti[["D_dec"]][["ctr"]]=c(2,2,1,1,2)
+
+sti[["E_inc"]][["exp"]]=c(1,1,0,1,3)
+sti[["E_inc"]][["ctr"]]=c(3,2,2,2,1)
+
+sti[["E_dec"]][["exp"]]=c(2,3,1,0,0)
+sti[["E_dec"]][["ctr"]]=c(1,2,2,2,3)
+
+sti[["F_inc"]][["exp"]]=c(0,0,2,2,3)
+sti[["F_inc"]][["ctr"]]=c(1,1,2,1,0)
+
+sti[["F_dec"]][["exp"]]=c(3,2,2,0,0)
+sti[["F_dec"]][["ctr"]]=c(1,1,0,1,2)
+
+sti[["G_inc"]][["exp"]]=c(0,2,2,3,4)
+sti[["G_inc"]][["ctr"]]=c(1,2,2,2,1)
+
+sti[["G_dec"]][["exp"]]=c(2,4,3,1,1)
+sti[["G_dec"]][["ctr"]]=c(1,2,2,1,2)
+
+sti[["H_inc"]][["exp"]]=c(1,2,2,4,5)
+sti[["H_inc"]][["ctr"]]=c(2,2,1,3,2)
+
+sti[["H_dec"]][["exp"]]=c(2,4,3,3,2)
+sti[["H_dec"]][["ctr"]]=c(1,2,2,2,3)
+```
+
+```{r}
+myExt<-function(d,dall){
+  drest=c(6:dall)
+  x=lm(d~c(1,2,3,4,5))
+  c(d,pmax(0,round(x$coefficients[1]+x$coefficients[2]*drest)))
+}
+```
+
+# figure tool
+```{r}
+myPic<-function(mod){
+  pic=data.frame()
+  for (k in names(sti)){
+    p=data.frame(sti=k,
+                 dayType=c("o","e","ee"),
+                 md=c(sti[[k]][[paste(mod,"o",sep="_")]],sti[[k]][[paste(mod,"e",sep="_")]],
+                      sti[[k]][[paste(mod,"ee",sep="_")]]))
+    pic=rbind(pic,p)
+  }
+
+  pic= pic %>% 
+    mutate(trType=substr(sti,1,1),
+           grType=substr(sti,3,5)) %>% 
+    mutate(dayType=factor(dayType,levels = c("o","e","ee"),
+                          labels = c("5 days","7 days","9 days")),
+           grType=factor(grType,levels = c("dec","inc")))
+
+  ggplot(pic,aes(x=grType,y=md,group=1))+
+    facet_grid(cols = vars(trType),rows = vars(dayType))+
+    geom_point()+
+    geom_line()+
+    geom_hline(yintercept = 0,linetype="dashed")+
+    theme_classic()+
+    ylab("harmful")+
+    theme(text = element_text(size=12),
+          axis.title.x = element_text(size=12, face="bold"),    
+          axis.title.y = element_text(size=12, face="bold"), 
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          legend.position = "bottom",
+          legend.margin =margin(r=0,l=0,t=-5,b=-5),
+          legend.text = element_text(size = 10),
+          legend.title = element_text(size=12, face="bold"))
+}
+```
+
+## rate, gamma decay
+```{r}
+samp=10000
+lam0=runif(samp,0,40)
+lam1=runif(samp,0,40)
+pi1=runif(samp,0,1)
+```
+
+```{r}
+# for (k in 1:length(sti)){
+#   n_num=40
+#   n_day=5
+#   mu=runif(samp,0,n_day) #decay mu
+#   va=sapply(mu,function(x){runif(1,0,x^2)})
+#   mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+#   eg=sti[[k]][["exp"]]
+#   cg=sti[[k]][["ctr"]]
+#   mysam=mat %>% apply(1,myType)%>%
+#     rowMeans(na.rm = T)
+#   sti[[k]][["gamma_o"]]=log(mysam[1])-log(mysam[2]) #five days
+# 
+#   n_day=7
+#   mu=runif(samp,0,n_day) #decay mu
+#   va=sapply(mu,function(x){runif(1,0,x^2)})
+#   mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+#   eg=sti[[k]][["exp"]] %>% myExt(7)
+#   cg=sti[[k]][["ctr"]] %>% myExt(7)
+#   mysam=mat %>% apply(1,myType)%>%
+#     rowMeans(na.rm = T)
+#   sti[[k]][["gamma_e"]]=log(mysam[1])-log(mysam[2]) #five days + one day
+# 
+#   n_day=9
+#   mu=runif(samp,0,n_day) #decay mu
+#   va=sapply(mu,function(x){runif(1,0,x^2)})
+#   mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+#   eg=sti[[k]][["exp"]] %>% myExt(8)
+#   cg=sti[[k]][["ctr"]] %>% myExt(8)
+#   mysam=mat %>% apply(1,myType)%>%
+#     rowMeans(na.rm = T)
+#   sti[[k]][["gamma_ee"]]=log(mysam[1])-log(mysam[2]) #five days + two days
+# }
+# save(sti,file="mysti.Rda")
+```
+
+```{r}
+load("mysti.Rda")
+```
+
+
+```{r}
+myPic("gamma")+ggtitle("gamma decay") 
+```
+
+```{r}
+load("biolab_exp1.Rda")
+```
+
+```{r}
+mymap=list("list1"=c("small_even_Increasing"="A_inc",
+                     "large_even_Decreasing"="B_dec",
+                     "small_dec_Increasing"="C_inc",
+                     "mid_dec_Decreasing"="D_dec",
+                     "large_dec_Increasing"="E_inc",
+                     "small_inc_Decreasing"="F_dec",
+                     "mid_inc_Increasing"="G_inc",
+                     "large_inc_Decreasing"="H_dec"
+                     ),
+           "list2"=c("small_even_Decreasing"="A_dec",
+                     "large_even_Increasing"="B_inc",
+                     "small_dec_Decreasing"="C_dec",
+                     "mid_dec_Increasing"="D_inc",
+                     "large_dec_Decreasing"="E_dec",
+                     "small_inc_Increasing"="F_inc",
+                     "mid_inc_Decreasing"="G_dec",
+                     "large_inc_Increasing"="H_inc"
+                     ))
+df.sub=df %>% 
+  mutate(uniSti=paste(trName,dir,sep="_"),
+         stiLabel=NA)
+
+idx=which(df.sub$lis==1)
+df.sub$stiLabel[idx]=mymap[["list1"]][df.sub$uniSti[idx]]
+idx=which(df.sub$lis==2)
+df.sub$stiLabel[idx]=mymap[["list2"]][df.sub$uniSti[idx]]
+```
+
+```{r}
+jud=df.sub %>% 
+  summarySE(measurevar = "ans", groupvars =  c("stiLabel","cond"))%>%
+  mutate(trType=substr(stiLabel,1,1),
+         grType=substr(stiLabel,3,5))
+
+jud %>% 
+  ggplot(aes(x=grType,y=ans,group=1))+
+  facet_grid(cols = vars(trType),rows = vars(cond))+
+  geom_point()+
+  geom_line()+
+  geom_hline(yintercept = 4,linetype="dashed")+
+  theme_classic()+
+  ylab("harmful")+
+  theme(text = element_text(size=12),
+        axis.title.x = element_text(size=12, face="bold"),    
+        axis.title.y = element_text(size=12, face="bold"), 
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        legend.margin =margin(r=0,l=0,t=-5,b=-5),
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size=12, face="bold"))
+```
+
+```{r}
+jud$md=NA
+for (k in 1:nrow(jud)){
+  if (jud$cond[k]=="ext"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_ee}
+  if (jud$cond[k]=="ori"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_o}
+}
+```
+
+```{r}
+optim(par=c(1),function(x,y,par){x=sign(x)*(abs(x)^par);-cor(x,y)},x= jud$md,y=jud$ans,method = "Brent",upper = 30,lower = -30)
+
+cor(sign(jud$md)*(abs(jud$md))^1.155277,jud$ans)
+cor(jud$md,jud$ans)
+cor(jud$md,jud$ans,method = "spearman")
+cor(sign(jud$md)*(abs(jud$md))^1.155277,jud$ans,method = "spearman")
+```
+
+
+```{r}
+p1=jud %>%
+  mutate(x=sign(md)*(abs(md))^1.308776,
+         y=ans)%>%
+  mutate(cond=factor(cond,levels=c("ori","ext")))%>%
+  mutate(cor="r = .53")%>%
+  ggplot(aes(x=x,y=y))+
+  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  geom_hline(yintercept = 4,linetype="dashed",color="gray")+
+  geom_errorbar(aes(ymin=ans-ci,ymax=ans+ci),color=alpha("black",0.1))+
+  geom_point(size=2,aes(color=cond,shape=cond))+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  ggtitle("Rate-based")+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Finished","Unfinished"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished","Unfinished"))+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black", x=-12, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.9,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=7.8),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+p2=jud %>%
+  mutate(x=rank(sign(md)*(abs(md))^1.308776),
+         y=rank(ans))%>%
+  mutate(cond=factor(cond,levels=c("ori","ext")))%>%
+  mutate(cor="rho*' = .62'")%>%
+  ggplot(aes(x=x,y=y))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  geom_point(size=2,aes(color=cond,shape=cond))+
+  ggtitle("Rate-based")+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Finished","Unfinished"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished","Unfinished"))+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor, size=1),colour="black",parse = TRUE, x=4, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  theme(legend.position = c(0.9,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=7.8),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+p1|p2
+ggsave(file="bac_fut_cor.pdf",width = 10,height = 4)
+```
+
+
+```{r}
+p1=df.sub %>% 
+  summarySE(measurevar = "ans",groupvars = c("cond","dir")) %>%
+  # summarySE(measurevar = "ans",groupvars = c("cond","dir")) %>%
+  mutate(cond=factor(cond,levels = c("ori","ext"),labels = c("Finished","Unfinished"))) %>%
+  ggplot(aes(x=dir,y=ans,color=cond,group=cond,shape=cond))+
+  geom_hline(yintercept = 4,linetype="dashed",color="gray")+
+  geom_errorbar(aes(ymin=ans-ci,ymax=ans+ci),width=0,size=1,alpha=0.6,position =position_dodge(.2))+
+  # geom_hline(yintercept = 4,linetype="dashed")+
+  geom_point(size=3,position =position_dodge(.2))+
+  geom_line(position =position_dodge(.2),linewidth=1)+
+  theme_classic()+
+  scale_shape_manual(values = c(16,17))+
+  scale_color_grey(start = 0,end=0.5)+
+  ylab("Harmful")+
+  xlab("Trend")+
+  ggtitle("Human")+
+  scale_y_continuous(limits = c(3,5))+
+  theme(legend.position = c(0.15,0.9),
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=8),
+    legend.text.align = 0)
+
+```
+
+```{r}
+p2=jud %>% 
+  summarySE(measurevar = "md",groupvars = c("cond","grType")) %>%
+  mutate(cond=factor(cond,levels = c("ori","ext"),labels = c("Finished","Unfinished")),
+         grType=factor(grType,levels=c("dec","inc"),labels=c("Decreasing","Increasing"))) %>%
+  ggplot(aes(x=grType,y=md,color=cond,group=cond,shape=cond))+
+  geom_hline(yintercept = 0,linetype="dashed",color="gray")+
+  geom_point(size=3,position =position_dodge(.2))+
+  geom_line(position =position_dodge(.2),linewidth=1)+
+  theme_classic()+
+  scale_shape_manual(values = c(16,17))+
+  scale_color_grey(start = 0,end=0.5)+
+  ylab("Harmful")+
+  xlab("Trend")+
+  ggtitle("Rate-based")+
+  scale_y_continuous(limits = c(-5,5))+
+  theme(legend.position = c(0.15,0.9),
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=8),
+    legend.text.align = 0)
+```
+
+```{r}
+p1|p2
+ggsave(file="bac_fut_rating.pdf",width = 9,height = 3.3)
+```
+

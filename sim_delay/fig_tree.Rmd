@@ -1,0 +1,71 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(data.tree)
+#DiagrammeR
+library(DiagrammeR)
+
+set.seed(2)
+```
+
+```{r}
+df=expand.grid(E5=c("C1","C2","C3","B"),E4=c("C1","C2","C3","B"),E3=c("C1","B"),E2=c("C1","B"),E1=c("B")) 
+
+idx=df%>%
+  apply(1, function(x){ 
+    y=x[x!="B"]
+    if (!length(y) || length(unique(y))==length(y)){T}else{F}
+    })
+
+df1=df[idx,]
+```
+
+```{r}
+df1$pathString <- paste(df1$E1, 
+                       df1$E2, 
+                       df1$E3,
+                       df1$E4,
+                       df1$E5,
+                       sep = "/")
+
+mytree <- as.Node(df1)
+```
+
+```{r}
+print(mytree, "E1", "E2", "E3","E4","E5", limit = 20)
+```
+
+```{r}
+SetGraphStyle(mytree, rankdir = "TB")
+SetNodeStyle(mytree, style = "filled", shape = "box", color="white",fillcolor = "white",fontsize=50, fontname="Arial", tooltip = GetDefaultTooltip)
+SetEdgeStyle(mytree, arrowhead = "none", color = "grey35", penwidth = 2)
+plot(mytree)
+```
+
+```{r}
+df2=df[64,]
+
+df2$pathString <- paste(df2$E1, 
+                       df2$E2, 
+                       df2$E3,
+                       df2$E4,
+                       df2$E5,
+                       sep = "/")
+
+mytree2 <- as.Node(df2)
+```
+
+```{r}
+SetGraphStyle(mytree2, rankdir = "TB")
+SetNodeStyle(mytree2, style = "filled", shape = "box", color="white",fillcolor = "white",fontsize=50, fontname="Arial", tooltip = GetDefaultTooltip)
+SetEdgeStyle(mytree2, arrowhead = "none", color = "grey35", penwidth = 2)
+plot(mytree2)
+```
+
