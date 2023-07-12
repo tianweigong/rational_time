@@ -10,7 +10,7 @@ myLam_g<-function(d,l0,l1,th1){
   
   la=pmin(n_num-cumsum(c(0,d[1:(length(d)-1)])), la)
   
-  cbind(d,la) %>% apply(1, function(x){ dpois(x[1],x[2]) }) %>%prod()
+  cbind(d,la) %>% apply(1, function(x){ dpois(x[1],x[2])}) %>%prod()
 }
 
 myLam_n<-function(d,l0){
