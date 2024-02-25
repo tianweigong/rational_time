@@ -148,7 +148,7 @@ save(md,par_lis,file="md_rate_earth_10000.Rda")
 #figure of the dataset
 ```{r}
 p1=data.frame(condition=factor(c(1,2,3,4,1,2,3,4),labels = c("Short, High","Long, High","Short, Low","Long, Low")),
-           obj=rep(c("Cause","One Lure"),each=4),
+           obj=rep(c("Cause","Lure A"),each=4),
            probability=c(48,52,66,58,22,27,16,21),
            se=c(3.0,3.9,4.8,4.5,3.0,3.9,2.1,2.4)) %>% 
   ggplot(aes(x=condition,y=probability,fill=obj))+
@@ -190,15 +190,16 @@ for (k in names(md)){
 }
 
 p2=pic %>%
+  subset(obj!="C") %>%
   summarySE(measurevar = "probability",groupvars = c("condition","obj"))%>%
-  ggplot(aes(x=condition,y=probability*100,fill=obj))+
+  ggplot(aes(x=condition,y=probability,fill=obj))+
   geom_bar(stat="identity", position = position_dodge(width = 0.9),color="black")+
   theme_classic()+
-  scale_fill_grey(start = 0.6,end=1,labels=c("Cause","Lure 1","Lure 2"))+
+  scale_fill_grey(start = 0.6,end=0.9,labels=c("Cause","Lure A"))+
   xlab("Condition")+
-  ylab("Log-likelihood Ratio")+
+  ylab("Posterior")+
   ggtitle("Event-based")+
-  scale_y_continuous(limits = c(0,73))+
+  scale_y_continuous(limits = c(0,0.73))+
   theme(legend.position = c(0.1,0.9),
     axis.text=element_text(size=12),
     axis.title = element_text(size=14),
@@ -226,15 +227,16 @@ for (k in names(md)){
 }
 
 p3=pic %>%
+  subset(obj!="C") %>%
   summarySE(measurevar = "probability",groupvars = c("condition","obj"))%>%
-  ggplot(aes(x=condition,y=probability*100,fill=obj))+
+  ggplot(aes(x=condition,y=probability,fill=obj))+
   geom_bar(stat="identity", position = position_dodge(width = 0.9),color="black")+
   theme_classic()+
-  scale_fill_grey(start = 0.6,end=1,labels=c("Cause","Lure 1","Lure 2"))+
+  scale_fill_grey(start = 0.6,end=0.9,labels=c("Cause","Lure A"))+
   xlab("Condition")+
-  ylab("Log-likelihood Ratio")+
+  ylab("Posterior")+
   ggtitle("Rate-based")+
-  scale_y_continuous(limits = c(0,73))+
+  scale_y_continuous(limits = c(0,0.73))+
   theme(legend.position = c(0.1,0.9),
     axis.text=element_text(size=12),
     axis.title = element_text(size=14),

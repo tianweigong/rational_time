@@ -22,25 +22,17 @@ myPic<-function(ty="prob"){
   for (k in 1: n){
     a=lis[[k]][1]
     b=lis[[k]][2]
-  
-    mm=lis[[k]][1]/lis[[k]][2]
-    vv=lis[[k]][1]/(lis[[k]][2]^2)
-    
-    
+
     if (ty=="size"){
        pic[paste(k)]=dgamma(pic$time,a,b)/dgamma((a-1)/b,a,b)
-       mylabel[k]=as.expression(bquote(alpha*"="*.(a)*","~beta*"="*.(b)))
     }else{
       pic[paste(k)]=dgamma(pic$time,a,b)
-          mylabel[k]=as.expression(bquote(alpha*"="*.(a)*","~beta*"="*.(b)~"("*mu*"="*.(mm)*","~sigma^2*"="*.(vv)*")"))
     }
                          
-    # mylabel[k]=paste("\u03B1=",lis[[k]][1],", \u03B2=",lis[[k]][2],sep="")
-  
 
+    # mylabel[k]=paste("\u03B1=",lis[[k]][1],", \u03B2=",lis[[k]][2],sep="")
+    mylabel[k]=as.expression(bquote(alpha~"="~.(lis[[k]][1])~", "~lambda~"="~.(lis[[k]][2])))
   }
-  
-  
   
   pic %>% gather(key="key",value="value", paste(c(1:n)))%>%
     mutate(key=factor(key,levels = paste(c(1:n)))) %>%
@@ -48,30 +40,37 @@ myPic<-function(ty="prob"){
     geom_line(linewidth=1.5)+
     theme_classic()+
     scale_color_manual(values=alpha(c("#E41A1C","#377EB8","#4DAF4A","#984EA3","#FF7F00"),0.7),labels=mylabel)+
-    theme(legend.position = c(0.82,0.8),
+    theme(legend.position = c(0.8,0.8),
           axis.text=element_text(size=14),
           axis.title = element_text(face="bold"),
           legend.title=element_blank(),
-          legend.text = element_text(size=8.5),
           legend.background = element_rect(fill='transparent'),
           legend.text.align = 0)
 }
 
-brewer.pal(n=9,"Set1")
-# values=c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-#"#E41A1C" "#377EB8" "#4DAF4A" "#984EA3" "#FF7F00" "#FFFF33" "#A65628" "#F781BF" "#999999"
+#brewer.pal(n=9,"Set1")
 ```
 
 ```{r}
-lis=list(c(1,.5),c(1,1),c(6,1),c(8,4),c(80,20))
-myPic("prob")+ylab("Probability Density")+xlab("Time")+
-  scale_y_continuous(breaks = c(0,0.5,1))
-
-ggsave(file="f1.pdf",width = 5,height = 3.5)
+# lis=list(c(1,.6))
+# myPic("prob")+ylab("Probability Density")+xlab("Time")+theme(legend.position ="none")
 ```
 
+# empirical density
 ```{r}
-lis=list(c(1,.5),c(1,1),c(6,1),c(8,4),c(80,20))
+x=rexp(100000,0.6)
+mm=density(x,n = 50, from=0.001, to=4.5)
+
+data.frame(tim=mm$x,dens=mm$y) %>% 
+  ggplot(aes(x=tim,y=dens))+
+  geom_point()
+```
+
+
+
+
+```{r}
+lis=list(c(1,.6),c(1,0.9),c(6,3),c(60,15),c(6,1))
 myPic("size")+
   ylab("Effect Size")+
   xlab("Time")+
@@ -144,7 +143,7 @@ ggsave(file="f_short.pdf",width = 5,height = 3.5)
 data.frame(time=seq(1,9,length.out= 20))%>%
   mutate(prob=dgamma(time,10,2))%>%
   ggplot(aes(x=time,y=prob))+
-  geom_bar(stat="identity",fill=alpha("#E41A1C",0.40))+
+  geom_bar(stat="identity",fill=alpha("#FF968D",0.42))+
   theme(axis.line=element_blank(),axis.text.x=element_blank(),
           axis.text.y=element_blank(),axis.ticks=element_blank(),
           axis.title.x=element_blank(),

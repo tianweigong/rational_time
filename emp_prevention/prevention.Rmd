@@ -426,6 +426,7 @@ p1=rbind(mutate(df.final,link=A_pro,ACC=acc_a),
   xlab("Condition")+
   ylab("Accuracy")+
   ggtitle("Human")+
+  geom_hline(yintercept = 0.33,linetype="dashed",color="black")+
   theme(legend.position = "none",
     axis.text=element_text(size=12),
     axis.title = element_text(size=14),

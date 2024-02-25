@@ -200,156 +200,62 @@ p8=myVaryPlotS1(pic2)+ scale_y_continuous(breaks = seq(-46,-56,-2))
 
 (p1|p2|p3|p4)/(p5|p6|p7|p8)
 
-ggsave(file="f_delayvary.pdf",width = 14,height = 7)
+# ggsave(file="f_delayvary.pdf",width = 14,height = 7)
 ```
 
 #expectation
 ```{r}
 myExpPlot<-function(pic){
-  pic %>% 
-  group_by(k_c,model)%>%
-  dplyr::summarise(ratio=mean(ratio))%>%
-  ggplot(aes(x=k_c,y=ratio,fill=model))+
-  geom_bar(stat = "identity",color="black")+ #,position=position_dodge(.0)
-  xlab("Number of Cause Events")+
-  ylab(expression("Log-likelihood Ratio "*(S[s]/S[l])) )+
-  scale_fill_grey(start = 0.9,end = 0.6,labels=c("Short Prior","Long Prior"))+
-  theme_classic()+
-  theme(legend.position = c(0.2,0.9),
-      axis.text=element_text(size=12),
-      axis.title = element_text(size=14),
-      legend.title=element_blank(),
-      plot.title = element_text(size = 16,face = "bold",hjust = 0.5),
-      legend.text=element_text(size=12),
-      legend.background = element_rect(fill='transparent'),
-      legend.text.align = 0)
+  pic %>%
+    mutate(mu=factor(mu,levels=c(10,20),labels=c("Short-delay Prior","Long-delay Prior")))%>%
+    group_by(cond,mu,k_c)%>%
+    dplyr::summarise(ratio=mean(ratio))%>%
+    ggplot(aes(x=k_c,y=ratio,fill=mu))+
+    geom_bar(stat = 'identity',position=position_dodge(.9),color="black")+
+    ylab("Log-likelihood Ratio")+
+    xlab("Number of Cause Events")+
+    scale_fill_grey(start = 0.9,end = 0.6)+
+    theme_classic()+
+    facet_wrap(~cond)+
+    theme(legend.position = c(0.15,0.9),
+        axis.text=element_text(size=12),
+        axis.title = element_text(size=14),
+        legend.title=element_blank(),
+        plot.title = element_text(size = 16,face = "bold",hjust = 0.5),
+        legend.text=element_text(size=9),
+        legend.background = element_rect(fill='transparent'),
+        legend.text.align = 0)
   
 }
 ```
 
-
-
-
 ```{r}
-pic1=myDataLoad("sim/exp10_",sim=20)
-pic11=pic1 %>%subset(mu==10)
-pic12=pic1 %>%subset(mu==20)
-pic1=pic11 %>% select(k_b,k_c,w_c,sigm) %>%
-  mutate(ratio=pic11$G1-pic12$G1,model="exp10")
+pic11=myDataLoad("sim/exp10_",sim=20) %>% mutate(cond="Fast Cause")
+pic12=myDataLoad("sim/exp20_",sim=20) %>% mutate(cond="Slow Cause")
 
-pic2=myDataLoad("sim/exp20_",sim=20)
-pic21=pic2 %>%subset(mu==10)
-pic22=pic2 %>%subset(mu==20)
-pic2=pic21 %>% select(k_b,k_c,w_c,sigm) %>%
-  mutate(ratio=pic21$G1-pic22$G1,model="exp20")
+pic1=rbind(pic11,pic12)
+  
 
-
-picE=rbind(pic1,pic2)
-
-pic1=myDataLoad("sim_poi/exp10_",sim=20)
-pic11=pic1 %>%subset(mu==10)
-pic12=pic1 %>%subset(mu==20)
-pic1=pic11 %>% select(k_b,k_c,w_c,sigm) %>%
-  mutate(ratio=pic11$G1-pic12$G1,model="exp10")
-
-pic2=myDataLoad("sim_poi/exp20_",sim=20)
-pic21=pic2 %>%subset(mu==10)
-pic22=pic2 %>%subset(mu==20)
-pic2=pic21 %>% select(k_b,k_c,w_c,sigm) %>%
-  mutate(ratio=pic21$G1-pic22$G1,model="exp20")
-
-picR=rbind(pic1,pic2)
-```
-
-```{r}
-p1=picE %>% myExpPlot() + 
+p1=pic1  %>% myExpPlot() + 
   scale_x_continuous(breaks = c(1:5))+
-  scale_y_continuous(limits = c(-10,15))+
+  # scale_y_continuous(limits = c(0,15))+
   ggtitle("Event-based")
-p2=picR %>% myExpPlot() + 
-  scale_x_continuous(breaks = seq(2,10,2))+
-  scale_y_continuous(limits = c(-10,15))+
+
+
+pic21=myDataLoad("sim_poi/exp10_",sim=20) %>% mutate(cond="Fast Cause")
+pic22=myDataLoad("sim_poi/exp20_",sim=20) %>% mutate(cond="Slow Cause")
+
+pic2=rbind(pic21,pic22) %>% 
+  # mutate(cond=factor(cond,levels=c("Short Delay","Long Delay"))) %>% 
+  subset(k_c %in% c(2,4,6,8,10)) %>%
+  mutate(k_c=k_c/2)
+
+p2=pic2 %>% myExpPlot() + 
+  scale_x_continuous(breaks = c(1:5),labels = c(2,4,6,8,10))+
+  # scale_y_continuous(limits = c(0,15))+
   ggtitle("Rate-based")
 
 p1|p2
 
-ggsave(file="f_delayexp.pdf",width = 9,height = 4)
+ggsave(file="f_delayexp.pdf",width = 12,height = 4)
 ```
-
-
-
-
-
-
-```{r}
-# data.frame(time=seq(1,20,length.out=100))%>%
-#   mutate(mu=dgamma(time,100,10))%>%
-#   ggplot(aes(x=time,y=mu))+
-#   geom_line()
-# 
-# data.frame(time=seq(1,20,length.out=100))%>%
-#   mutate(mu=dgamma(time,400,20))%>%
-#   ggplot(aes(x=time,y=mu))+
-#   geom_line()
-```
-
-
-
-```{r}
-# pic1=data.frame()
-# for (k in 1:sim){
-#     load(paste("sim/delay_",k,".Rda",sep=""))
-#     d=data.frame(mu=sapply(mm,"[[","mu"),
-#                  w_c=sapply(mm,"[[","w_c"),
-#                  G1=sapply(mm,"[[","G1"),
-#                  G0=sapply(mm,"[[","G0"),
-#                  power=sapply(sapply(mm,"[[","par1")[c("c_p"),],"[[",1)
-#                  )
-#     pic1=rbind(pic1,d)
-# }
-
-# pic1 %>%
-#   group_by(mu,w_c)%>%
-#   dplyr::summarise(power=mean(power))%>%
-#   mutate(w_c=factor(w_c,levels=c(1,0.8,0.6)))%>%
-#   ggplot(aes(x=mu,y=power,color=w_c))+
-#   geom_line(linewidth=1)+
-#   geom_point()+
-#   # scale_y_continuous(limits = c(-2,6),breaks = c(-2,0,2,4,6))+
-#   scale_colour_grey(start = 0.1,end = 0.8,labels=c(expression(w[c]*"=1"),expression(w[c]*"=0.8"),expression(w[c]*"=0.6")))+ #
-#   # geom_hline(yintercept = 0,linetype="dashed")+
-#   theme_classic()+
-#   ylab("Causal Power")+
-#   xlab("Causal Delay")+
-#   theme(legend.position = c(0.8,0.8),
-#       axis.text=element_text(size=14),
-#       axis.title = element_text(size=14),
-#       legend.title=element_blank(),
-#       legend.text=element_text(size=12),
-#       legend.background = element_rect(fill='transparent'),
-#       legend.text.align = 0)
-
-
-# pic %>%
-#   group_by(mu,w_c)%>%
-#   dplyr::summarise(G1=mean(G1),G0=mean(G0))%>%
-#   mutate(w_c=factor(w_c,levels=c(1,0.8,0.6)))%>%
-#   pivot_longer(cols = c("G1","G0"),names_to = "str",values_to = "logli")%>%
-#   ggplot(aes(x=mu,y=logli,color=w_c,linetype=str))+
-#   geom_line(linewidth=1)+
-#   geom_point()+
-#   # scale_y_continuous(limits = c(-2,6),breaks = c(-2,0,2,4,6))+
-#   scale_colour_grey(start = 0.1,end = 0.8,labels=c(expression(w[c]*"=1"),expression(w[c]*"=0.8"),expression(w[c]*"=0.6")))+ #
-#   # geom_hline(yintercept = 0,linetype="dashed")+
-#   theme_classic()+
-#   ylab("Log-likelihood Ratio")+
-#   xlab("Causal Delay")+
-#   theme(legend.position = c(0.8,0.8),
-#       axis.text=element_text(size=14),
-#       axis.title = element_text(size=14),
-#       legend.title=element_blank(),
-#       legend.text=element_text(size=12),
-#       legend.background = element_rect(fill='transparent'),
-#       legend.text.align = 0)
-```
-

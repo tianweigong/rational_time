@@ -162,12 +162,39 @@ pi1=runif(samp,0,1)
 ```
 
 ```{r}
+for (k in 1:length(sti)){
+  n_num=40
+  n_day=5
+  mu=rgamma(samp,1.5,0.5) #decay mu
+  va=sapply(mu,function(x){runif(1,0,x^2)})
+  mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+  eg=sti[[k]][["exp"]]
+  cg=sti[[k]][["ctr"]]
+  mysam=mat %>% apply(1,myType)%>%
+    rowMeans(na.rm = T)
+  sti[[k]][["gamma_o"]]=log(mysam[1])-log(mysam[2]) #five days
+
+  n_day=5
+  # mu=rgamma(samp,4.17,0.83) #decay mu
+  mu=rgamma(samp,6,1)
+  va=sapply(mu,function(x){runif(1,0,x^2)})
+  mat=matrix(c(lam0,lam1,pi1,(mu^2)/va,mu/va),nrow = samp)
+  eg=sti[[k]][["exp"]]
+  cg=sti[[k]][["ctr"]] 
+  mysam=mat %>% apply(1,myType)%>%
+    rowMeans(na.rm = T)
+  sti[[k]][["gamma_l"]]=log(mysam[1])-log(mysam[2]) #five days + late prior
+}
+save(sti,file="mysti.Rda")
+```
+
+```{r}
 load("mysti.Rda")
 ```
 
 
 ```{r}
-myPic("gamma")+ggtitle("gamma decay") 
+# myPic("gamma")+ggtitle("gamma decay") 
 ```
 
 ```{r}
@@ -224,67 +251,67 @@ jud %>%
 
 jud$md=NA
 for (k in 1:nrow(jud)){
-  if (jud$cond[k]=="ext"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_ee}
+  # if (jud$cond[k]=="ext"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_ee}
+  if (jud$cond[k]=="ext"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_l}
   if (jud$cond[k]=="ori"){jud$md[k]=sti[[jud$stiLabel[k]]]$gamma_o}
 }
 ```
 
 ```{r}
-load("biolab_exp2.Rda")
-df=df %>% subset(cond=="Finished") %>% 
-  mutate(ans=ans+4,stiLabel=trName)
-
-write.csv(df,file="biolab_tmp.csv",row.names = F)
-df=read.csv("biolab_tmp.csv")
-
-jud2=df %>% 
-  summarySE(measurevar = "ans", groupvars =  c("stiLabel","cond"))%>%
-  mutate(trType=substr(stiLabel,1,1),
-         grType=substr(stiLabel,3,5))
-
-jud2$md=NA
-for (k in 1:nrow(jud2)){
-  jud2$md[k]=sti[[jud2$stiLabel[k]]]$gamma_dyn
-}
+# load("biolab_exp2.Rda")
+# df=df %>% subset(cond=="Finished") %>% 
+#   mutate(ans=ans+4,stiLabel=trName)
+# 
+# write.csv(df,file="biolab_tmp.csv",row.names = F)
+# df=read.csv("biolab_tmp.csv")
+# 
+# jud2=df %>% 
+#   summarySE(measurevar = "ans", groupvars =  c("stiLabel","cond"))%>%
+#   mutate(trType=substr(stiLabel,1,1),
+#          grType=substr(stiLabel,3,5))
+# 
+# jud2$md=NA
+# for (k in 1:nrow(jud2)){
+#   jud2$md[k]=sti[[jud2$stiLabel[k]]]$gamma_dyn
+# }
 ```
 
 ```{r}
-jud.comb=rbind(jud,jud2)
+# jud.comb=rbind(jud,jud2)
+jud.comb=jud
 ```
 
 ```{r}
 optim(par=c(0.4),function(x,y,par){x=sign(x)*(abs(x)^par);-cor(x,y)},x= jud.comb$md,y=jud.comb$ans,method = "Brent",upper = 3,lower = -3)
 
-cor(sign(jud.comb$md)*(abs(jud.comb$md))^0.9756939,jud.comb$ans)
+cor(sign(jud.comb$md)*(abs(jud.comb$md))^1.209465,jud.comb$ans)
 cor(jud.comb$md,jud.comb$ans)
 cor(jud.comb$md,jud.comb$ans,method = "spearman")
-cor(sign(jud.comb$md)*(abs(jud.comb$md))^0.9756939,jud.comb$ans,method = "spearman")
+cor(sign(jud.comb$md)*(abs(jud.comb$md))^1.209465,jud.comb$ans,method = "spearman")
 ```
 
 ```{r}
 p1=jud.comb %>%
-  mutate(x=sign(md)*(abs(md))^0.9756939,
+  mutate(x=sign(md)*(abs(md))^1.209465,
          y=ans-4)%>%
   mutate(cond=factor(cond,levels=c("ori","ext","Finished")))%>%
-  mutate(cor="r = .51")%>%
+  mutate(cor="r = .75")%>%
   ggplot(aes(x=x,y=y))+
-  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
-  geom_hline(yintercept = 4-4,linetype="dashed",color="gray")+
+  # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+  # geom_hline(yintercept = 4-4,linetype="dashed",color="gray")+
   geom_errorbar(aes(ymin=ans-ci-4,ymax=ans+ci-4),color=alpha("black",0.1))+
   geom_point(size=2,aes(color=cond,shape=cond))+
   geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
   ggtitle("Rate-based")+
   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Finished (static)",
-                              "Unfinished (static)",
-                              "Finished (dynamic)"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished (static)",
-                                                     "Unfinished (static)",
-                                                     "Finished (dynamic)"))+
+                     labels=c("Finished",
+                              "Unfinished"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished",
+                                                     "Unfinished" ))+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=-7.5, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor, size=1),colour="black", x=-5.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.87,0.11),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -298,21 +325,19 @@ p1=jud.comb %>%
   legend.text.align = 0)
 
 p2=jud.comb %>%
-  mutate(x=rank(sign(md)*(abs(md))^0.9756939),
+  mutate(x=rank(sign(md)*(abs(md))^1.209465),
          y=rank(ans))%>%
   mutate(cond=factor(cond,levels=c("ori","ext","Finished")))%>%
-  mutate(cor="rho*' = .58'")%>%
+  mutate(cor="rho*' = .78'")%>%
   ggplot(aes(x=x,y=y))+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
   geom_point(size=2,aes(color=cond,shape=cond))+
   ggtitle("Rate-based")+
   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Finished (static)",
-                              "Unfinished (static)",
-                              "Finished (dynamic)"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished (static)",
-                                                     "Unfinished (static)",
-                                                     "Finished (dynamic)"))+
+                     labels=c("Finished",
+                              "Unfinished"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished",
+                                                     "Unfinished"))+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
@@ -342,9 +367,7 @@ df.sub.comb=rbind(subset(df.sub,select = c("cond","dir","ans")),
 p1=df.sub.comb %>% 
   summarySE(measurevar = "ans",groupvars = c("cond","dir")) %>%
   # summarySE(measurevar = "ans",groupvars = c("cond","dir")) %>%
-  mutate(cond=factor(cond,levels = c("ori","ext","Finished"),labels=c("Finished (static)",
-                                                                      "Unfinished (static)",
-                                                                      "Finished (dynamic)"))) %>%
+  mutate(cond=factor(cond,levels = c("ori","ext"),labels=c("Finished","Unfinished"))) %>%
   ggplot(aes(x=dir,y=ans-4,color=cond,group=cond,shape=cond))+
   # geom_hline(yintercept = 4-4,linetype="dashed",color="gray")+
   geom_errorbar(aes(ymin=ans-ci-4,ymax=ans+ci-4),width=0,size=1,alpha=0.6,position =position_dodge(.2))+
@@ -357,13 +380,13 @@ p1=df.sub.comb %>%
   ylab("Mean Causal Judgment")+
   xlab("Trend")+
   ggtitle("Human")+
-  scale_y_continuous(limits = c(3-4,5-4))+
-  theme(legend.position = c(0.24,0.9),
+  scale_y_continuous(limits = c(3-4+0.5,5-4+0.5))+
+  theme(legend.position = c(0.2,0.9),
     axis.text=element_text(size=12),
     axis.title = element_text(size=14),
     legend.title=element_blank(),
     plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-    legend.text=element_text(size=8),
+    legend.text=element_text(size=12),
     legend.key.height= unit(0.4, 'cm'),
     legend.key.width = unit(0.8, 'cm'),
     # legend.key.size = unit(0.3, 'cm'),
@@ -371,7 +394,7 @@ p1=df.sub.comb %>%
 
 p2=jud.comb %>% 
   summarySE(measurevar = "md",groupvars = c("cond","grType")) %>%
-  mutate(cond=factor(cond,levels = c("ori","ext","Finished"),labels = c("Finished (static)","Unfinished (static)","Finished (dynamic)")),
+  mutate(cond=factor(cond,levels = c("ori","ext"),labels = c("Finished","Unfinished")),
          grType=factor(grType,levels=c("dec","inc"),labels=c("Decreasing","Increasing"))) %>%
   ggplot(aes(x=grType,y=md,color=cond,group=cond,shape=cond))+
   # geom_hline(yintercept = 0,linetype="dashed",color="gray")+
@@ -381,16 +404,16 @@ p2=jud.comb %>%
   # scale_linetype_manual(values = c("solid","dotdash","longdash"))+
   scale_shape_manual(values = c(16,17,15))+
   scale_color_grey(start = 0,end=0.75)+
-  ylab("Mean Causal Judgment")+
+  ylab("Log-likelihood Ratio")+
   xlab("Trend")+
   ggtitle("Rate-based")+
-  scale_y_continuous(limits = c(-5,5))+
-  theme(legend.position = c(0.24,0.9),
+  scale_y_continuous(limits = c(-4,2))+
+  theme(legend.position = c(0.2,0.9),
     axis.text=element_text(size=12),
     axis.title = element_text(size=14),
     legend.title=element_blank(),
     plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-    legend.text=element_text(size=8),
+    legend.text=element_text(size=12),
     legend.key.height= unit(0.4, 'cm'),
     legend.key.width = unit(0.8, 'cm'),
     legend.text.align = 0)
@@ -407,7 +430,7 @@ myM2A<-function(m,v){
 }
 
 x1=myM2A(3,6) #myM2A(3,6)
-x2=myM2A(5,6)
+x2=myM2A(6,6)
 
 pgamma(5,x1[1],x1[2])
 pgamma(5,x2[1],x2[2])
@@ -421,19 +444,17 @@ df.pic=rbind(
                  cls="long")
         )
 
-
-
 df.pic%>%
   mutate(Prior=factor(cls,levels=c("short","long"),labels=c("Short Prior","Long Prior")))%>%
   ggplot(aes(x=t,y=v,color=Prior))+
   geom_vline(xintercept=5,linetype="dashed",color="gray")+
-  geom_line(linewidth=1.5)+
+  geom_line(linewidth=2)+
   xlab("Time (Day)")+
   ylab("Probability Density")+
   theme_classic()+
   scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8,9,10))+
   # scale_color_grey(start = 0,end=0.7)+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3"),.9))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#FF7F00"),.9))+
   theme(text = element_text(size=16),
         axis.title = element_text(face="bold"),
         plot.title = element_text(size = 16,face = "bold"),
@@ -446,7 +467,7 @@ ggsave(file="bac_prior.pdf",width = 7,height = 4)
 
 ```{r}
 x1=myM2A(3,6) #myM2A(3,6)
-x2=myM2A(5,6)
+x2=myM2A(6,6)
 
 set.seed(3)
 samp=40
@@ -457,7 +478,7 @@ for (k in 1:samp){
   al=(mu[k]^2)/va[k]
   bt=mu[k]/va[k]
   mod=dgamma(((al-1)/bt),shape=al,rate=bt)
-  d=data.frame(id=k,t=seq(0,10,length.out=100))%>%
+  d=data.frame(id=k,t=seq(0,12,length.out=100))%>%
     mutate(v1=dgamma(t,shape=al,rate=bt),
            v=v1/mod)
   df.all=rbind(df.all,d)
@@ -467,12 +488,12 @@ df.all%>%
   # mutate(Prior=factor(cls,levels=c("short","long"),labels=c("Short Prior","Long Prior")))%>%
   ggplot(aes(x=t,y=v,group=id))+
   # geom_vline(xintercept=5,linetype="dashed",color="gray")+
-  geom_line(linewidth=0.3,color=alpha("#4DAF4A",0.6))+
+  geom_line(linewidth=0.7,color=alpha("#4DAF4A",0.3))+
   xlab("Time (Day)")+
   ylab("Influence Function")+
   theme_classic()+
    scale_y_continuous(breaks = 1,labels = "Max \n Level")+
-  scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8,9,10))+
+  scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8,9,10,11,12))+
   theme(text = element_text(size=14),
         axis.title = element_text(face="bold"),
         plot.title = element_text(size = 16,face = "bold"),
@@ -493,7 +514,7 @@ for (k in 1:samp){
   al=(mu[k]^2)/va[k]
   bt=mu[k]/va[k]
   mod=dgamma(((al-1)/bt),shape=al,rate=bt)
-  d=data.frame(id=k,t=seq(0,10,length.out=100))%>%
+  d=data.frame(id=k,t=seq(0,12,length.out=100))%>%
     mutate(v1=dgamma(t,shape=al,rate=bt),
            v=v1/mod)
   df.all=rbind(df.all,d)
@@ -503,12 +524,12 @@ df.all%>%
   # mutate(Prior=factor(cls,levels=c("short","long"),labels=c("Short Prior","Long Prior")))%>%
   ggplot(aes(x=t,y=v,group=id))+
   # geom_vline(xintercept=5,linetype="dashed",color="gray")+
-  geom_line(linewidth=0.3,color=alpha("#984EA3",0.6))+
+  geom_line(linewidth=0.7,color=alpha("#FF7F00",0.3))+
   xlab("Time (Day)")+
   ylab("Influence Function")+
   theme_classic()+
    scale_y_continuous(breaks = 1,labels = "Max \n Level")+
-  scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8,9,10))+
+  scale_x_continuous(breaks = c(0,1,2,3,4,5,6,7,8,9,10,11,12))+
   theme(text = element_text(size=14),
         axis.title = element_text(face="bold"),
         plot.title = element_text(size = 16,face = "bold"),
