@@ -1,0 +1,198 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(gridExtra)
+library(parallel)
+library(ggplot2)
+set.seed(2)
+
+source("fun_g0g1.R")
+```
+
+follow Griffith & Tenenbaum (2005) idea to choose between G0 and G1 structure
+```{r}
+myG0<-function(dl,br){ #baserate only
+  apply(cbind(1:samp),1,function(x){prod(dpois(dl,br[x]))})
+}
+
+myG1<-function(dl,df.cau,br,c_p,c_al,c_bt){ #baserate and cause
+  x=rep(dl,samp) %>% matrix(nrow=length(dl),ncol=samp)
+  y=apply(cbind(1:samp),1,function(x){c_p[x]*colSums(mydec(df.cau+0.5,c_al[x],c_bt[x]))+br[x]})
+  dpois(x,y) %>% apply(.,2,prod)
+}
+
+
+myData<-function(dl){
+  table(cut(dl, breaks = mycut)) %>% as.numeric()
+}
+
+mydec<-function(t,s,r){
+  dgamma(t,shape = s,rate=r)/dgamma((s-1)/r,shape = s,rate=r)
+}
+
+#causal power,data point(cause), base rate, effect density, mean, variance
+```
+
+```{r}
+mySim<-function(sti){
+  
+  if (!paste(sti[["w_c"]],sti[["mu"]],sti[["sigm"]]) %in% 
+    c("1 10 1","1 10 2","0.8 10 1","0.8 10 2","1 20 2","1 20 4")){
+      sti[["G1"]]=NA
+      sti[["G0"]]=NA
+      sti[["par1"]]=NA
+      sti[["par0"]]=NA
+        return(sti)
+  }
+  
+  br= 1/ runif(samp,0,t_end)
+  c_p=runif(samp,0,1) #causal power of the target cause
+  c_m=runif(samp,0,t_end) #0 to 300 s 
+  
+  if ("pri" %in% names(sti)){
+    c_m=rgamma(samp,sti[["pri"]][1],sti[["pri"]][2])
+    # c_v=runif(samp,0,25)
+  }
+  
+  c_v=sapply(c_m^2, function(x){runif(1)*x})
+
+  c_al=(c_m^2)/c_v
+  c_bt=c_m/c_v
+  
+  
+  t_e=sti[["t_e"]]
+  t_c=sti[["t_c"]]
+  
+  dl=t_e %>% myData()
+  
+  df.cau=matrix(NA,nrow=length(t_c),ncol=length(mycut)-1)
+  for (k in 1:length(t_c)){
+    df.cau[k,]=mycut[-length(mycut)]-t_c[k]
+  }
+  
+  g1=myG1(dl,df.cau,br,c_p,c_al,c_bt)
+  g0=myG0(dl,br)
+  ix1=sort(g1, index.return=TRUE,decreasing=TRUE)$ix[1:100]
+  ix0=sort(g0, index.return=TRUE,decreasing=TRUE)$ix[1:100]
+  
+  g1_par=list("g1"=g1[ix1],"br"=br[ix1],"c_p"=c_p[ix1],"c_m"=c_m[ix1],"c_v"=c_v[ix1])
+  g0_par=list("g0"=g0[ix0],"br"=br[ix0])
+  
+  sti[["G1"]]=log(mean(g1))
+  sti[["G0"]]=log(mean(g0))
+  sti[["par1"]]=g1_par
+  sti[["par0"]]=g0_par
+  
+  return(sti)
+}
+```
+
+#delay invariance
+```{r}
+set.seed(10)
+
+samp=10000
+sim=200
+w_c=c(1,0.8)
+mu=c(10,20)
+sigm=c(1,2,4)
+
+t_end=100
+mycut=c(0:t_end)
+k_c=3
+k_b=1
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim_poi/duration100_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+
+t_end=150
+mycut=c(0:t_end)
+k_c=5
+k_b=2
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim_poi/duration150_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+
+t_end=200
+mycut=c(0:t_end)
+k_c=7
+k_b=3
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim_poi/duration200_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+```
+
+
+```{r}
+# k_c,k_b,w_c,mu,sigm
+# samp=10000
+# sim=200
+# t_end=300
+# k_b=3
+# k_c=10
+# w_c=c(0.6,0.8,1)
+# mu=c(10,15,20,25,30)
+# sigm=1
+# 
+# wholelist=lapply(as.list(1:sim),
+#                  function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+#                                   "nam"="sim_poi/delay_","simCode"=x)})
+# mclapply(wholelist,myRun,mc.cores=20)
+```
+
+#delay unvaried
+```{r}
+# k_c,k_b,w_c,mu,sigm
+samp=10000
+sim=200
+t_end=300
+k_b=3
+k_c=10
+w_c=1
+mu=c(10,20,30)
+sigm=c(1, 3, 5, 7, 9)
+
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim_poi/vary_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+```
+
+#expected delay
+```{r}
+# k_c,k_b,w_c,mu,sigm
+samp=10000
+sim=20
+t_end=300
+k_b=3
+k_c=c(1:10)
+w_c=1
+mu=c(10,20)
+sigm=1
+
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "pri"=c(100,10),
+                                  "nam"="sim_poi/exp10_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+
+wholelist=list()
+for (k in 1:sim){
+  load(paste("sim_poi/exp10_",k,".Rda",sep=""))
+  wholelist[[k]]=list("sti"=mm,
+                      "pri"=c(400,20),
+                      "nam"="sim_poi/exp20_","simCode"=k)
+}
+
+mclapply(wholelist,myRun,mc.cores=20)
+```
+

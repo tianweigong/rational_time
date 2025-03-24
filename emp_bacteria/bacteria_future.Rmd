@@ -284,34 +284,37 @@ jud.comb=jud
 ```{r}
 optim(par=c(0.4),function(x,y,par){x=sign(x)*(abs(x)^par);-cor(x,y)},x= jud.comb$md,y=jud.comb$ans,method = "Brent",upper = 3,lower = -3)
 
-cor(sign(jud.comb$md)*(abs(jud.comb$md))^1.209465,jud.comb$ans)
+cor(sign(jud.comb$md)*(abs(jud.comb$md))^0.9696,jud.comb$ans)
 cor(jud.comb$md,jud.comb$ans)
 cor(jud.comb$md,jud.comb$ans,method = "spearman")
-cor(sign(jud.comb$md)*(abs(jud.comb$md))^1.209465,jud.comb$ans,method = "spearman")
+cor(sign(jud.comb$md)*(abs(jud.comb$md))^0.9696,jud.comb$ans,method = "spearman")
 ```
 
 ```{r}
 p1=jud.comb %>%
-  mutate(x=sign(md)*(abs(md))^1.209465,
+  mutate(x=sign(md)*(abs(md))^0.9696,
          y=ans-4)%>%
   mutate(cond=factor(cond,levels=c("ori","ext","Finished")))%>%
-  mutate(cor="r = .75")%>%
+  mutate(cor="r = .76")%>%
   ggplot(aes(x=x,y=y))+
   # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
   # geom_hline(yintercept = 4-4,linetype="dashed",color="gray")+
-  geom_errorbar(aes(ymin=ans-ci-4,ymax=ans+ci-4),color=alpha("black",0.1))+
-  geom_point(size=2,aes(color=cond,shape=cond))+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  geom_smooth(method = "lm",colour = alpha("black",0.5))+
+  geom_errorbar(aes(ymin=ans-ci-4,ymax=ans+ci-4),color=alpha("black",0.3))+
+  geom_point(size=4.5,aes(color=cond,shape=cond,fill=cond))+
   ggtitle("Rate-based")+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Finished",
                               "Unfinished"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished",
+    scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Finished",
+                              "Unfinished"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Finished",
                                                      "Unfinished" ))+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=-5.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,colour="black", x=-3.9, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.87,0.11),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -328,20 +331,23 @@ p2=jud.comb %>%
   mutate(x=rank(sign(md)*(abs(md))^1.209465),
          y=rank(ans))%>%
   mutate(cond=factor(cond,levels=c("ori","ext","Finished")))%>%
-  mutate(cor="rho*' = .78'")%>%
+  mutate(cor="rho*' = .77'")%>%
   ggplot(aes(x=x,y=y))+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(size=2,aes(color=cond,shape=cond))+
+  geom_point(size=4.5,aes(color=cond,shape=cond,fill=cond))+
   ggtitle("Rate-based")+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Finished",
                               "Unfinished"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Finished",
+    scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Finished",
+                              "Unfinished"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Finished",
                                                      "Unfinished"))+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black",parse = TRUE, x=4, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,colour="black",parse = TRUE, x=4, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.87,0.11),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -419,7 +425,7 @@ p2=jud.comb %>%
     legend.text.align = 0)
 
 p1|p2
-ggsave(file="bac_fut_rating.pdf",width = 9,height = 3.3)
+# ggsave(file="bac_fut_rating.pdf",width = 9,height = 3.3)
 ```
 
 ```{r}
@@ -445,7 +451,7 @@ df.pic=rbind(
         )
 
 df.pic%>%
-  mutate(Prior=factor(cls,levels=c("short","long"),labels=c("Short Prior","Long Prior")))%>%
+  mutate(Prior=factor(cls,levels=c("short","long"),labels=c("Finished (Short-delay Prior)","Unfinished (Long-delay Prior)")))%>%
   ggplot(aes(x=t,y=v,color=Prior))+
   geom_vline(xintercept=5,linetype="dashed",color="gray")+
   geom_line(linewidth=2)+
@@ -459,8 +465,9 @@ df.pic%>%
         axis.title = element_text(face="bold"),
         plot.title = element_text(size = 16,face = "bold"),
         legend.title=element_blank(),
-        legend.position = c(0.87,0.9)
+        legend.position = c(0.77,0.9)
         )
+
 
 ggsave(file="bac_prior.pdf",width = 7,height = 4)
 ```

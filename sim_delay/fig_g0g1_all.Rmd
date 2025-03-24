@@ -84,6 +84,59 @@ p1|p2
 # ggsave(file="f_datapoint.pdf",width = 10,height = 4)
 ```
 
+#delay short
+```{r}
+myDelayPlot<-function(pic){
+  pic %>% 
+  group_by(mu,k_b)%>%
+  dplyr::summarise(ratio=mean(ratio))%>%
+  mutate(k_b=factor(k_b,levels=c(1,2,4)))%>%
+  ggplot(aes(x=mu,y=ratio,color=k_b))+
+  geom_line(linewidth=1)+
+  geom_point()+
+  # scale_colour_grey(start = 0.1,end = 0.8,labels=c(expression(w[c]*"=1"),expression(w[c]*"=0.8"),expression(w[c]*"=0.6")))+ 
+  theme_classic()+
+  ylab("Log-likelihood Ratio")+
+  xlab("Causal Delay")+
+  theme(legend.position = c(0.8,0.8),
+      axis.text=element_text(size=12),
+      axis.title = element_text(size=14),
+      plot.title = element_text(size = 16,face = "bold",hjust = 0.05),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)
+}
+
+myDelayPlotS1<-function(pic){
+  pic %>% 
+  group_by(mu,k_b)%>%
+  dplyr::summarise(G1=mean(G1))%>%
+  mutate(k_b=factor(k_b,levels=c(1,2,4)))%>%
+  ggplot(aes(x=mu,y=G1,color=k_b))+
+  geom_line(linewidth=1)+
+  geom_point()+
+  # scale_colour_grey(start = 0.1,end = 0.8,labels=c(expression(w[c]*"=1"),expression(w[c]*"=0.8"),expression(w[c]*"=0.6")))+ #
+  # geom_hline(yintercept = 0,linetype="dashed")+
+  theme_classic()+
+  ylab("Log-likelihood of S1")+
+  xlab("Causal Delay")+
+  theme(legend.position = "none",
+      axis.text=element_text(size=12),
+      axis.title = element_text(size=14),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)
+}
+
+pic2=myDataLoad("sim/delaynew_")
+
+myDelayPlot(pic2)
+myDelayPlotS1(pic2)
+```
+
+
 ```{r}
 myDelayPlot<-function(pic){
   pic %>% 

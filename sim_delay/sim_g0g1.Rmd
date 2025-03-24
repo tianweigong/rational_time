@@ -146,20 +146,36 @@ mclapply(wholelist,myRun,mc.cores=20)
 
 #delay short
 ```{r}
-# k_c,k_b,w_c,mu,sigm
 samp=10000
 sim=200
 t_end=300
-k_b=3
+k_b=c(1,2,4)
 k_c=5
-w_c=c(0.6,0.8,1)
+w_c=1
 mu=c(10,15,20,25,30)
 sigm=1
 
 wholelist=lapply(as.list(1:sim),
                  function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
-                                  "nam"="sim/delay_","simCode"=x)})
-mclapply(wholelist,myRun,mc.cores=20)
+                                  "nam"="sim/delaynew_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=25)
+```
+
+```{r}
+# k_c,k_b,w_c,mu,sigm
+# samp=10000
+# sim=200
+# t_end=300
+# k_b=3
+# k_c=5
+# w_c=c(0.6,0.8,1)
+# mu=c(10,15,20,25,30)
+# sigm=1
+# 
+# wholelist=lapply(as.list(1:sim),
+#                  function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+#                                   "nam"="sim/delay_","simCode"=x)})
+# mclapply(wholelist,myRun,mc.cores=20)
 ```
 
 #delay unvaried

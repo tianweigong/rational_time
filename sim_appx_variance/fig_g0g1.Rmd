@@ -1,0 +1,155 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(parallel)
+library(ggplot2)
+library(matrixStats)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+# meanTop<-function(v){mean(v[1:10])}
+marPar<-function(l){
+  sum(l[[1]]*(l[[2]])/sum(l[[2]]))
+}
+```
+
+```{r}
+myDataLoad<-function(fname,sim=200){
+  pic=data.frame()
+  for (k in 1:sim){
+    # if (!as.character(k) %in%  lis.f){next}
+    load(paste(fname,k,".Rda",sep=""))
+      
+      d=data.frame(k_b=sapply(mm,"[[","k_b"),
+                   k_c=sapply(mm,"[[","k_c"),
+                   w_c=sapply(mm,"[[","w_c"),
+                   mu=sapply(mm,"[[","mu"),
+                   sigm=sapply(mm,"[[","sigm"),
+                   G1=sapply(mm,"[[","G1"),
+                   G0=sapply(mm,"[[","G0")
+                   ) %>%
+      mutate(ratio=G1-G0)
+      pic=rbind(pic,d)
+  }
+  pic
+}
+```
+
+```{r}
+# lis.f.r=list.files("sim")
+# lis.f=substr(lis.f.r,14,nchar(lis.f.r)-4) 
+pic1=rbind(myDataLoad("sim/duration100_")) %>%
+  mutate(dur=100)
+
+pic2=rbind(myDataLoad("sim/duration150_")) %>%
+  mutate(dur=150)
+
+pic3=rbind(myDataLoad("sim/duration200_")) %>%
+  mutate(dur=200)
+
+# pic4=rbind(myDataLoad("sim/duration250_",sim=190)) %>%
+  # mutate(dur=250)
+
+
+mypic=rbind(pic1,pic2,pic3)
+mypic=mypic[!is.na(mypic$G1),] %>%
+  mutate(cond=paste(w_c,mu,sigm,sep="_"))
+
+mylab=c(expression(m[u]*"=10, "*i[u]*"=1, "*w[c]*"=1  "),
+                              expression(m[u]*"=10, "*i[u]*"=2, "*w[c]*"=1  "),
+                              expression(m[u]*"=20, "*i[u]*"=2, "*w[c]*"=1  "),
+                              expression(m[u]*"=20, "*i[u]*"=4, "*w[c]*"=1  "),
+                              expression(m[u]*"=10, "*i[u]*"=1, "*w[c]*"=0.8"),
+                              expression(m[u]*"=10, "*i[u]*"=2, "*w[c]*"=0.8"))
+p1=mypic %>% 
+  # mutate(wcmu=paste(w_c,mu,sep="_"))%>%
+  Rmisc::summarySE(measurevar = "ratio",groupvars = c("cond","dur")) %>%
+  mutate(cond=factor(cond,levels=c("1_10_1","1_10_2",
+                                   "1_20_2","1_20_4",
+                                   "0.8_10_1","0.8_10_2")
+                     ))%>%
+  ggplot(aes(x=dur,y=ratio,color=cond,linetype = cond,shape=cond))+
+  geom_point(size=2)+
+  geom_line(linewidth=1)+
+  scale_linetype_manual(values = c(1,1,2,2,3,3),
+                        labels=mylab)+
+  scale_colour_manual(values=c("#333333","#333333","#666666","#666666",
+                               "#cbcbcb","#cbcbcb"),labels=mylab)+
+  scale_shape_manual(values = c(3,5,3,5,3,5),labels=mylab)+
+    theme_classic()+
+    theme(legend.position ="none",
+      axis.text=element_text(size=10),
+      axis.title = element_text(size=14),
+      plot.title = element_text(size = 16,face = "bold",hjust = 0.05),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)+
+    ylab("Log-likelihood Ratio")+
+  xlab("Learning Duration")+
+  ggtitle("Event-based")
+```
+
+```{r}
+pic_p1=rbind(myDataLoad("sim_poi/duration100_")) %>%
+  mutate(dur=100)
+
+pic_p2=rbind(myDataLoad("sim_poi/duration150_")) %>%
+  mutate(dur=150)
+
+pic_p3=rbind(myDataLoad("sim_poi/duration200_")) %>%
+  mutate(dur=200)
+
+mypic2=rbind(pic_p1,pic_p2,pic_p3)
+mypic2=mypic2[!is.na(mypic2$G1),] %>%
+  mutate(cond=paste(w_c,mu,sigm,sep="_"))
+
+mylab=c(expression(m[u]*"=10, "*i[u]*"=1, "*w[c]*"=1  "),
+                              expression(m[u]*"=10, "*i[u]*"=2, "*w[c]*"=1  "),
+                              expression(m[u]*"=20, "*i[u]*"=2, "*w[c]*"=1  "),
+                              expression(m[u]*"=20, "*i[u]*"=4, "*w[c]*"=1  "),
+                              expression(m[u]*"=10, "*i[u]*"=1, "*w[c]*"=0.8"),
+                              expression(m[u]*"=10, "*i[u]*"=2, "*w[c]*"=0.8"))
+p2=mypic2 %>% 
+  # mutate(wcmu=paste(w_c,mu,sep="_"))%>%
+  Rmisc::summarySE(measurevar = "ratio",groupvars = c("cond","dur")) %>%
+  mutate(cond=factor(cond,levels=c("1_10_1","1_10_2",
+                                   "1_20_2","1_20_4",
+                                   "0.8_10_1","0.8_10_2")
+                     ))%>%
+  ggplot(aes(x=dur,y=ratio,color=cond,linetype = cond,shape=cond))+
+  geom_point(size=2)+
+  geom_line(linewidth=1)+
+  scale_linetype_manual(values = c(1,1,2,2,3,3),
+                        labels=mylab)+
+  scale_colour_manual(values=c("#333333","#333333","#666666","#666666",
+                               "#cbcbcb","#cbcbcb"),labels=mylab)+
+  scale_shape_manual(values = c(3,5,3,5,3,5),labels=mylab)+
+     theme_classic()+
+    theme( axis.text=element_text(size=10),
+      axis.title = element_text(size=14),
+      plot.title = element_text(size = 16,face = "bold",hjust = 0.05),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)+
+    ylab("Log-likelihood Ratio")+
+  xlab("Learning Duration")+
+  ggtitle("Rate-based")
+```
+
+```{r}
+p1+p2
+ggsave(file="f_variance.pdf",width = 9.5,height = 4)
+```
+

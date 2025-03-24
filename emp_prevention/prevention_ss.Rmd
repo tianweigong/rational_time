@@ -1,0 +1,239 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(patchwork)
+library(Hmisc)  
+library(Rmisc)
+set.seed(2)
+```
+
+```{r}
+mySF<-function(sf,vals){
+  vals$md_sf= exp(vals$md/sf)
+  
+  for (k in unique(vals$uni_label)){
+      idx=which(vals$uni_label==k)
+      vals$md_sf[idx]=vals$md_sf[idx]/sum(vals$md_sf[idx])
+  }
+  # 1-cor(vals$md_sf,vals$ppl)
+  -sum(log(vals$md_sf)*vals$ppl)
+}
+```
+
+#event-based SS model
+```{r}
+load("mdall_exp1a.Rda")
+load("exp1a.Rda")
+
+mdall=mdall %>% select(seed,fea_i,choice,trial_type,uni_id,mycondition) %>%
+  mutate(md=fea_i,mycondition=factor(mycondition,levels=c("regular","irregular")))
+mdall$ppl=0
+for (k in 1:nrow(mdall)){
+  sub=df.final %>% subset(seed==mdall$seed[k] & trial_type== mdall$trial_type[k] &
+                          choice==mdall$choice[k] & mycondition==mdall$mycondition[k])
+  mdall$ppl[k]=nrow(sub)
+}
+```
+
+```{r}
+pic2=data.frame()
+for (k in unique(mdall$uni_id)){
+  tmp=mdall %>% subset(uni_id==k)
+  tmp2=mutate(tmp,state=substr(tmp$choice,1,1),cau="A")%>%
+    dplyr::group_by(mycondition,cau,state,trial_type,uni_id)%>%
+    dplyr::summarise(ppl=sum(ppl),md=sum(md),.groups="drop_last")
+  tmp2$ppl=tmp2$ppl/sum(tmp2$ppl)
+  pic2=rbind(pic2,tmp2)
+  
+  tmp2=mutate(tmp,state=substr(tmp$choice,2,2),cau="B")%>%
+    dplyr::group_by(mycondition,cau,state,trial_type,uni_id)%>%
+    dplyr::summarise(ppl=sum(ppl),md=sum(md),.groups="drop_last")
+  tmp2$ppl=tmp2$ppl/sum(tmp2$ppl)
+  pic2=rbind(pic2,tmp2)
+}
+#model fitting
+```
+
+```{r}
+tmp=summarySE(pic2,measurevar = c("md"),
+            groupvars = c("mycondition","cau","state","trial_type"))
+pic2.link= 
+  summarySE(pic2,measurevar = c("ppl"),
+            groupvars = c("mycondition","cau","state","trial_type"))%>% 
+  cbind(md=tmp$md)
+
+pic2.link$uni_label=paste(pic2.link$mycondition,pic2.link$cau,pic2.link$trial_type,sep="_")
+```
+
+```{r}
+x=optim(100,mySF,vals=pic2.link,method ="Brent", upper = 1000,lower = 0)
+
+pic2.link$md_sf= exp(pic2.link$md/0.4069444)
+for (k in unique(pic2.link$uni_label)){
+    idx=which(pic2.link$uni_label==k)
+    pic2.link$md_sf[idx]=pic2.link$md_sf[idx]/sum(pic2.link$md_sf[idx])
+}
+```
+
+```{r}
+p3=pic2.link %>%
+  mutate(mycondition=factor(mycondition,levels=c("regular","irregular"),labels=c("Regular","Irregular")))%>%
+  mutate(cor="r = .98")%>%
+  ggplot(aes(x=md_sf,y=ppl))+
+  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+  scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+  geom_point(aes(color=state,shape=state),size=2)+
+  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+                     labels=c("Generative","Non-causal","Preventative"))+
+  scale_shape_manual(values =c(15,16,17,18),labels=c("Generative","Non-causal","Preventative"))+
+  # facet_wrap(~mycondition)+
+  ggtitle("Event-based")+
+  xlab("Model")+
+  ylab("Human")+
+  theme_classic()+
+  geom_text(aes(label=cor,size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+#fontface = "italic", 
+  theme(legend.position = c(0.93,0.15),
+  axis.text=element_text(size=12),
+  strip.text.x = element_text(size = 14),
+  axis.title = element_text(size=14),
+  legend.title=element_blank(),
+  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+  legend.text=element_text(size=10),
+  legend.box.background = element_rect(linetype="dashed",size=0.5),
+  legend.margin=margin(t = -5,r=3,l=0),
+  legend.text.align = 0)
+
+cor(pic2.link$md_sf,pic2.link$ppl)
+```
+
+
+```{r}
+p3
+ggsave(file="prev_ss.pdf",width = 17,height = 4.5)
+```
+
+#acc figure
+```{r}
+p1=rbind(mutate(df.final,link=A_pro,ACC=acc_a),
+      mutate(df.final,link=B_pro,ACC=acc_b)) %>%
+  summarySE(measurevar = "ACC",groupvars = c("mycondition","subject")) %>% 
+  summarySE(measurevar = "ACC",groupvars = c("mycondition")) %>% 
+  mutate(mycondition=factor(mycondition,
+                            levels=c("regular","irregular"),
+                            labels=c("Regular","Irregular")))%>%
+  ggplot(aes(x=mycondition,y=ACC,fill=mycondition))+
+  geom_bar(stat="identity",color="black")+
+  geom_errorbar(aes(ymin=ACC-ci,ymax=ACC+ci),width=0.2)+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Accuracy")+
+  ggtitle("Human")+
+  geom_hline(yintercept = 0.33,linetype="dashed",color="black")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+p2=pic.link %>% 
+  mutate(link=ifelse(cau=="A",substr(trial_type,1,1),substr(trial_type,2,2)))%>%
+  mutate(ACC=md*(link==state)*3)%>%
+  summarySE(measurevar = "ACC",groupvars = c("mycondition")) %>% 
+  mutate(mycondition=factor(mycondition,
+                            levels=c("R","U"),
+                            labels=c("Regular","Irregular")))%>%
+  ggplot(aes(x=mycondition,y=ACC,fill=mycondition))+
+  geom_bar(stat="identity",color="black")+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_grey(start = 0.6,end=0.9)+
+  theme_classic()+
+  theme(legend.title = element_blank(),
+        legend.position = "none")+
+  xlab("Condition")+
+  ylab("Accuracy")+
+  ggtitle("Rate-based")+
+  theme(legend.position = "none",
+    axis.text=element_text(size=12),
+    axis.title = element_text(size=14),
+    legend.title=element_blank(),
+    plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+    legend.text=element_text(size=12),
+    legend.text.align = 0)
+
+p3=pic2.link %>% 
+  mutate(link=ifelse(cau=="A",substr(trial_type,1,1),substr(trial_type,2,2)))%>%
+  mutate(ACC=md*(link==state)*3)%>%
+  summarySE(measurevar = "ACC",groupvars = c("mycondition")) %>% 
+  mutate(mycondition=factor(mycondition,
+                          levels=c("regular","irregular"),
+                          labels=c("Regular","Irregular")))%>%
+  ggplot(aes(x=mycondition,y=ACC,fill=mycondition))+
+    geom_bar(stat="identity",color="black")+
+    scale_y_continuous(limits = c(0,1))+
+    scale_fill_grey(start = 0.6,end=0.9)+
+    theme_classic()+
+    theme(legend.title = element_blank(),
+          legend.position = "none")+
+    xlab("Condition")+
+    ylab("Accuracy")+
+    ggtitle("Event-based")+
+    theme(legend.position = "none",
+      axis.text=element_text(size=12),
+      axis.title = element_text(size=14),
+      legend.title=element_blank(),
+      plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+      legend.text=element_text(size=12),
+      legend.text.align = 0)
+
+
+p1|p3|p2
+ggsave(file="prev_acc.pdf",width = 9,height = 3.6)
+```
+
+#demo figure
+```{r}
+p1=data.frame(t=seq(0,5,length.out=100))%>% 
+  mutate(v=dgamma(t,shape=36,rate=12))%>%
+  ggplot(aes(x=t,y=v))+
+  geom_line(linewidth=1.5,color=alpha("black",0.7))+
+  xlab("Time (second)")+
+  ylab("Probability Density")+
+  theme_classic()+
+  theme(text = element_text(size=14),
+        axis.title = element_text(face="bold"),
+        plot.title = element_text(size = 16,face = "bold")
+        )+
+  ggtitle("a) Preventative Window Length")
+
+p2=data.frame(t=seq(0,5,length.out=100))%>% 
+  mutate(v=1-pgamma(t,shape=36,rate=12))%>%
+  ggplot(aes(x=t,y=v))+
+  geom_line(linewidth=1.5,color=alpha("black",0.7))+
+  xlab("Time (second)")+
+  ylab("1 - Cumulative Probability")+
+  theme_classic()+
+  theme(text = element_text(size=14),
+        axis.title = element_text(face="bold"),
+        plot.title = element_text(size = 16,face = "bold")
+        )+
+  ggtitle("b) Preventative Influence")
+
+p1|p2
+# ggsave(file="f_prevention.pdf",width = 10,height = 4.5)
+```

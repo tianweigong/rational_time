@@ -1,0 +1,160 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(parallel)
+library(ggplot2)
+library(matrixStats)
+library(patchwork)
+set.seed(2)
+```
+
+```{r}
+# meanTop<-function(v){mean(v[1:10])}
+marPar<-function(l){
+  sum(l[[1]]*(l[[2]])/sum(l[[2]]))
+}
+```
+
+```{r}
+myDataLoad<-function(fname,sim=200){
+  pic=data.frame()
+  for (k in 1:sim){
+    # if (!as.character(k) %in%  lis.f){next}
+    load(paste(fname,k,".Rda",sep=""))
+      
+      d=data.frame(k_b=sapply(mm,"[[","k_b"),
+                   k_c=sapply(mm,"[[","k_c"),
+                   w_c=sapply(mm,"[[","w_c"),
+                   mu=sapply(mm,"[[","mu"),
+                   sigm=sapply(mm,"[[","sigm"),
+                   G1=sapply(mm,"[[","G1"),
+                   G0=sapply(mm,"[[","G0")
+                   ) %>%
+      mutate(ratio=G1-G0)
+      pic=rbind(pic,d)
+  }
+  pic
+}
+```
+
+```{r}
+# lis.f.r=list.files("sim")
+# lis.f=substr(lis.f.r,14,nchar(lis.f.r)-4) 
+pic1=rbind(myDataLoad("sim2/delaynomatch_"),
+           myDataLoad("sim/delaynomatch_")) %>% 
+  mutate(cond="nomatch")
+
+pic12=rbind(myDataLoad("sim2/delaymatch12_"),
+            myDataLoad("sim/delaymatch12_")) %>% 
+   mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+pic14=rbind(myDataLoad("sim2/delaymatch14_"),
+            myDataLoad("sim/delaymatch14_")) %>% 
+   mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+pic16=rbind(myDataLoad("sim2/delaymatch16_"),
+            myDataLoad("sim/delaymatch16_")) %>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+pic18=rbind(myDataLoad("sim2/delaymatch18_"),
+            myDataLoad("sim/delaymatch18_"))%>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+mypic=rbind(pic12,pic14,pic16,pic18,pic1,
+            mutate(pic1[pic1$mu==10,],cond="base_match"),
+            mutate(pic1[pic1$mu==10,],cond="all_match")
+            )
+
+p1=mypic %>% 
+  Rmisc::summarySE(measurevar = "ratio",groupvars = c("cond","mu")) %>%
+  mutate(cond=factor(cond,levels=c("nomatch","base_match","all_match"),
+                     labels=c("no-match","baserate-match","all-match")))%>%
+  ggplot(aes(x=mu,y=ratio,color=cond))+
+  geom_line(linewidth=2)+
+  geom_point(size=2.5)+
+  scale_colour_grey(start = 0.8,end = 0.1)+ 
+  theme_classic()+
+  ylab("Log-likelihood Ratio")+
+  xlab("Causal Delay")+
+  theme(legend.position = c(0.2,0.2),
+      axis.text=element_text(size=10),
+      axis.title = element_text(size=14),
+      plot.title = element_text(size = 16,face = "bold",hjust = 0.05),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)+
+  ggtitle("Event-based")
+  # ggtitle(expression(bold("Event-based ("*k[c]*"=5)")))
+```
+
+
+```{r}
+poi_pic1=rbind(myDataLoad("sim_poi/delaynomatch_",sim=600),
+           myDataLoad("sim_poi2/delaynomatch_",sim=400)) %>%
+  mutate(cond="nomatch")
+
+poi_pic12=rbind(myDataLoad("sim_poi/delaymatch12_",sim=600),
+            myDataLoad("sim_poi2/delaymatch12_",sim=400)) %>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+poi_pic14=rbind(myDataLoad("sim_poi/delaymatch14_",sim=600),
+            myDataLoad("sim_poi2/delaymatch14_",sim=400))%>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+poi_pic16=rbind(myDataLoad("sim_poi/delaymatch16_",sim=600),
+            myDataLoad("sim_poi2/delaymatch16_",sim=400))%>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+
+poi_pic18=rbind(myDataLoad("sim_poi/delaymatch18_",sim=600),
+            myDataLoad("sim_poi2/delaymatch18_",sim=400))%>%
+  mutate(cond=ifelse(mu==sigm*10,"all_match","base_match"))
+
+poi_mypic=rbind(poi_pic12,poi_pic14,poi_pic16,poi_pic18,poi_pic1,
+            mutate(poi_pic1[poi_pic1$mu==10,],cond="base_match"),
+            mutate(poi_pic1[poi_pic1$mu==10,],cond="all_match")
+            )
+
+p2=poi_mypic %>% 
+  Rmisc::summarySE(measurevar = "ratio",groupvars = c("cond","mu")) %>%
+  mutate(cond=factor(cond,levels=c("nomatch","base_match","all_match"),
+                     labels=c("no-match","baserate-match","all-match")))%>%
+  ggplot(aes(x=mu,y=ratio,color=cond))+
+  geom_line(linewidth=2)+
+  geom_point(size=2.5)+
+  scale_colour_grey(start = 0.8,end = 0.1)+ 
+  theme_classic()+
+  ylab("Log-likelihood Ratio")+
+  xlab("Causal Delay")+
+  theme(legend.position = c(0.2,0.2),
+      axis.text=element_text(size=10),
+      axis.title = element_text(size=14),
+      plot.title = element_text(size = 16,face = "bold",hjust = 0.05),
+      legend.title=element_blank(),
+      legend.text=element_text(size=12),
+      legend.background = element_rect(fill='transparent'),
+      legend.text.align = 0)+
+      ggtitle("Rate-based")
+  # ggtitle(expression(bold("Rate-based ("*k[c]*"=10)")))
+
+p1+p2
+ggsave(file="f_invariance.pdf",width = 9.5,height = 4)
+```
+
+```{r}
+p=c()
+for (k in 1:2000){
+  p=c(p,diff(sort(runif(5,0,300))))
+}
+mean(p)
+```
+

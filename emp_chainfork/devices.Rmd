@@ -123,22 +123,21 @@ cor.test(dt$md_sf,dt$ppl,method = "spearman")
 p1=dt %>%
   mutate(cor="r = .68")%>%
   ggplot(aes(x=md_sf,y=ppl))+
-  # scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
-  # scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
   geom_vline(xintercept = 0,linetype="dashed",color="gray")+
   geom_hline(yintercept = 50,linetype="dashed",color="gray")+
-  # geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=type,shape=type),size=3)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_smooth(method = "lm",colour = alpha("black",0.5))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.3))+
+  geom_point(aes(color=type,shape=type,fill=type),size=4)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Chain","Fork"))+
   ggtitle("Event-based")+
   xlab("Model")+
   ylab("Human (Rating from 0 to 100)")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=-3, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,colour="black", x=-2.5, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.85,0.15),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -160,16 +159,18 @@ p2=dt %>%
   # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
   # geom_hline(yintercept = 50,linetype="dashed",color="gray")+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=type,shape=type),size=3)+
+  geom_point(aes(color=type,shape=type,fill=type),size=4)+
   # geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+    scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Chain","Fork"))+
   ggtitle("Event-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,parse = TRUE,colour="black", x=1.4, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.85,0.15),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -297,22 +298,22 @@ cor.test(dt2$md_sf,dt2$ppl,method = "spearman")
 p3=dt2 %>%
   mutate(cor="r = .81")%>%
   ggplot(aes(x=md_sf,y=ppl))+
-  # scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
-  # scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
   geom_vline(xintercept = 0,linetype="dashed",color="gray")+
   geom_hline(yintercept = 50,linetype="dashed",color="gray")+
-  # geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=type,shape=type),size=3)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  
+  geom_smooth(method = "lm",colour = alpha("black",0.5))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.3))+
+  geom_point(aes(color=type,shape=type,fill=type),size=4)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Chain","Fork"))+
   ggtitle("Rate-based")+
   xlab("Model")+
   ylab("Human (Rating from 0 to 100)")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=-1.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,colour="black", x=-1.4, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.85,0.15),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -331,19 +332,18 @@ p4=dt2 %>%
   ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
   scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
   scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
-  # geom_vline(xintercept = 0,linetype="dashed",color="gray")+
-  # geom_hline(yintercept = 50,linetype="dashed",color="gray")+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=type,shape=type),size=3)+
-  # geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_point(aes(color=type,shape=type,fill=type),size=4)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+  scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Chain","Fork"))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Chain","Fork"))+
   ggtitle("Rate-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,parse = TRUE,colour="black", x=1.5, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.85,0.15),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -366,115 +366,117 @@ ggsave(file="device_spearman.pdf",width = 9,height = 4)
 
 #with label
 ```{r}
-p1=dt %>%
-  mutate(cor="r = .68")%>%
-  ggplot(aes(x=md_sf,y=ppl))+
-  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
-  geom_hline(yintercept = 50,linetype="dashed",color="gray")+
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=type,shape=type),size=3)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
-  ggtitle("Event-based")+
-  xlab("Model")+
-  ylab("Human (Rating from 0 to 100)")+
-  theme_classic()+
-  geom_text_repel(aes(label = uni_id))+
-  geom_text(aes(label=cor, size=1),colour="black", x=-3, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
-  theme(legend.position = c(0.85,0.15),
-  axis.text=element_text(size=12),
-  strip.text.x = element_text(size = 14),
-  axis.title = element_text(size=14),
-  legend.title=element_blank(),
-  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-  legend.text=element_text(size=10),
-  legend.box.background = element_rect(linetype="dashed",size=0.5),
-  legend.margin=margin(t = -5,r=3,l=0),
-  legend.text.align = 0)
-
-p2=dt %>%
-  mutate(cor="rho*' = .73'")%>%
-  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
-  scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
-  scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
-  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=type,shape=type),size=3)+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
-  ggtitle("Event-based")+
-  xlab("Model")+
-  ylab("Human")+
-  theme_classic()+
-  geom_text_repel(aes(label = uni_id))+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
-  theme(legend.position = c(0.85,0.15),
-  axis.text=element_text(size=12),
-  strip.text.x = element_text(size = 14),
-  axis.title = element_text(size=14),
-  legend.title=element_blank(),
-  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-  legend.text=element_text(size=10),
-  legend.box.background = element_rect(linetype="dashed",size=0.5),
-  legend.margin=margin(t = -5,r=3,l=0),
-  legend.text.align = 0)
-
-p3=dt2 %>%
-  mutate(cor="r = .81")%>%
-  ggplot(aes(x=md_sf,y=ppl))+
-  geom_vline(xintercept = 0,linetype="dashed",color="gray")+
-  geom_hline(yintercept = 50,linetype="dashed",color="gray")+
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=type,shape=type),size=3)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
-  ggtitle("Rate-based")+
-  xlab("Model")+
-  ylab("Human (Rating from 0 to 100)")+
-  theme_classic()+
-  geom_text_repel(aes(label = uni_id))+
-  geom_text(aes(label=cor, size=1),colour="black", x=-1.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
-  theme(legend.position = c(0.85,0.15),
-  axis.text=element_text(size=12),
-  strip.text.x = element_text(size = 14),
-  axis.title = element_text(size=14),
-  legend.title=element_blank(),
-  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-  legend.text=element_text(size=10),
-  legend.box.background = element_rect(linetype="dashed",size=0.5),
-  legend.margin=margin(t = -5,r=3,l=0),
-  legend.text.align = 0)
-
-p4=dt2 %>%
-  mutate(cor="rho*' = .79'")%>%
-  ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
-  scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
-  scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
-  geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=type,shape=type),size=3)+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
-                     labels=c("Chain","Fork"))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
-  ggtitle("Rate-based")+
-  xlab("Model")+
-  ylab("Human")+
-  theme_classic()+
-  geom_text_repel(aes(label = uni_id))+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
-  theme(legend.position = c(0.85,0.15),
-  axis.text=element_text(size=12),
-  strip.text.x = element_text(size = 14),
-  axis.title = element_text(size=14),
-  legend.title=element_blank(),
-  plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
-  legend.text=element_text(size=10),
-  legend.box.background = element_rect(linetype="dashed",size=0.5),
-  legend.margin=margin(t = -5,r=3,l=0),
-  legend.text.align = 0)
+# p1=dt %>%
+#   mutate(cor="r = .68")%>%
+#   ggplot(aes(x=md_sf,y=ppl))+
+#   geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+#   geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+#   geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+#   geom_point(aes(color=type,shape=type),size=4)+
+#   geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+#   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+#                      labels=c("Chain","Fork"))+
+#   scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+#   ggtitle("Event-based")+
+#   xlab("Model")+
+#   ylab("Human (Rating from 0 to 100)")+
+#   theme_classic()+
+#   geom_text_repel(aes(label = uni_id))+
+#   geom_text(aes(label=cor, size=1),colour="black", x=-3, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+#   theme(legend.position = c(0.85,0.15),
+#   axis.text=element_text(size=12),
+#   strip.text.x = element_text(size = 14),
+#   axis.title = element_text(size=14),
+#   legend.title=element_blank(),
+#   plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+#   legend.text=element_text(size=10),
+#   legend.box.background = element_rect(linetype="dashed",size=0.5),
+#   legend.margin=margin(t = -5,r=3,l=0),
+#   legend.text.align = 0)
+# 
+# p2=dt %>%
+#   mutate(cor="rho*' = .73'")%>%
+#   ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+#   scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+#   scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+#   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+#   geom_point(aes(color=type,shape=type),size=4)+
+#   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+#                      labels=c("Chain","Fork"))+
+#   scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+#   ggtitle("Event-based")+
+#   xlab("Model")+
+#   ylab("Human")+
+#   theme_classic()+
+#   geom_text_repel(aes(label = uni_id))+
+#   geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+#   theme(legend.position = c(0.85,0.15),
+#   axis.text=element_text(size=12),
+#   strip.text.x = element_text(size = 14),
+#   axis.title = element_text(size=14),
+#   legend.title=element_blank(),
+#   plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+#   legend.text=element_text(size=10),
+#   legend.box.background = element_rect(linetype="dashed",size=0.5),
+#   legend.margin=margin(t = -5,r=3,l=0),
+#   legend.text.align = 0)
+# 
+# p3=dt2 %>%
+#   mutate(cor="r = .81")%>%
+#   ggplot(aes(x=md_sf,y=ppl))+
+#   geom_vline(xintercept = 0,linetype="dashed",color="gray")+
+#   geom_hline(yintercept = 50,linetype="dashed",color="gray")+
+#   geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
+#   geom_point(aes(color=type,shape=type),size=4)+
+#   geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
+#   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+#                      labels=c("Chain","Fork"))+
+#   scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+#   ggtitle("Rate-based")+
+#   xlab("Model")+
+#   ylab("Human (Rating from 0 to 100)")+
+#   theme_classic()+
+#   geom_text_repel(aes(label = uni_id))+
+#   geom_text(aes(label=cor, size=1),colour="black", x=-1.6, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+#   theme(legend.position = c(0.85,0.15),
+#   axis.text=element_text(size=12),
+#   strip.text.x = element_text(size = 14),
+#   axis.title = element_text(size=14),
+#   legend.title=element_blank(),
+#   plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+#   legend.text=element_text(size=10),
+#   legend.box.background = element_rect(linetype="dashed",size=0.5),
+#   legend.margin=margin(t = -5,r=3,l=0),
+#   legend.text.align = 0)
+# 
+# p4=dt2 %>%
+#   mutate(cor="rho*' = .79'")%>%
+#   ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
+#   scale_x_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+#   scale_y_continuous(limits = c(0,13),breaks = c(0,3,6,9,12))+
+#   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
+#   geom_point(aes(color=type,shape=type),size=4)+
+#   scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+#                      labels=c("Chain","Fork"))+
+#     scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+#                      labels=c("Chain","Fork"))+
+#   scale_shape_manual(values =c(15,16,17,18),labels=c("Chain","Fork"))+
+#   ggtitle("Rate-based")+
+#   xlab("Model")+
+#   ylab("Human")+
+#   theme_classic()+
+#   geom_text_repel(aes(label = uni_id))+
+#   geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+#   theme(legend.position = c(0.85,0.15),
+#   axis.text=element_text(size=12),
+#   strip.text.x = element_text(size = 14),
+#   axis.title = element_text(size=14),
+#   legend.title=element_blank(),
+#   plot.title = element_text(size = 16,hjust = 0.5, color = "gray40",face = "bold"),
+#   legend.text=element_text(size=10),
+#   legend.box.background = element_rect(linetype="dashed",size=0.5),
+#   legend.margin=margin(t = -5,r=3,l=0),
+#   legend.text.align = 0)
 ```
 
 ```{r}

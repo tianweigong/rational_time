@@ -20,7 +20,7 @@ myG1<-function(df.path,df.delay,df.prob,del.nam,del.tim,del.typ,del.pro,df.miss,
   })
 }
 
-myEventBased<-function(sqc){
+myEventBased<-function(sqc,br,c_p,c_al,c_bt){
   t_c=sqc$time[sqc$obj!="E"] %>% sort() 
   names(t_c)=paste("C",s2(c(1:length(t_c))),sep="")
   
@@ -98,14 +98,14 @@ myData<-function(dl,mycut){
   table(cut(dl, breaks = mycut)) %>% as.numeric()
 }
 
-myRateBased<-function(sqc){
+myRateBased<-function(sqc,br,c_p,c_al,c_bt){
   t_c=sqc$time[sqc$obj!="E"] %>% sort() 
   names(t_c)=paste("C",s2(c(1:length(t_c))),sep="")
   
   t_e=sqc$time[sqc$obj=="E"] %>% sort()
   names(t_e)=paste("E",s2(c(1:length(t_e))),sep="")
-  t_end=max(sqc$time)
-  mycut=c(0:t_end)+0.00000001
+  t_end=ceiling(max(sqc$time))
+  mycut=c(0:t_end)+0.00001
   
   dl=t_e %>% myData(.,mycut)
   

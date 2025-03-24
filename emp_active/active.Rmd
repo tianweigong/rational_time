@@ -299,18 +299,20 @@ p1=pic %>%
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
   scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
   scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=choi,shape=choi),size=2)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_smooth(method = "lm",colour = alpha("black",0.5))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.3))+
+  geom_point(aes(fill=choi,shape=choi,color=choi),size=3)+
+ scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
   facet_wrap(~cyclic)+
   ggtitle("Rate-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,colour="black", x=0.1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.94,0.2),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -332,16 +334,18 @@ p2=pic %>%
   mutate(cor=ifelse(cyclic=="Acyclic","rho*' = .53'","rho*' = .71'"))%>%
   ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=choi,shape=choi),size=2)+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_point(aes(color=choi,shape=choi,fill=choi),size=3)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
   facet_wrap(~cyclic)+
   ggtitle("Rate-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=14, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor),size=7,parse = TRUE,colour="black", x=25, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.94,0.2),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -475,18 +479,20 @@ p3=pic2 %>%
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
   scale_x_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
   scale_y_continuous(limits = c(0,1),breaks = c(0,0.2,0.4,0.6,0.8,1))+
-  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.1))+
-  geom_point(aes(color=choi,shape=choi),size=2)+
-  geom_smooth(method = "lm",se=F,colour = alpha("black",0.5))+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_smooth(method = "lm",colour = alpha("black",0.5))+
+  geom_errorbar(aes(ymin=ppl-ci,ymax=ppl+ci),color=alpha("black",0.3))+
+  geom_point(aes(fill=choi,shape=choi,color=choi),size=3)+
+ scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
   facet_wrap(~cyclic)+
   ggtitle("Event-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),colour="black", x=0.05, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor),size=7,colour="black", x=0.1, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.94,0.2),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),
@@ -508,16 +514,18 @@ p4=pic2 %>%
   mutate(cor=ifelse(cyclic=="Acyclic","rho*' = .63'","rho*' = .46'"))%>%
   ggplot(aes(x=rank(md_sf),y=rank(ppl)))+
   geom_abline(intercept = 0, slope = 1,linetype="dashed",color="gray") +
-  geom_point(aes(color=choi,shape=choi),size=2)+
-  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.9),
+  geom_point(aes(color=choi,shape=choi,fill=choi),size=3)+
+  scale_color_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
                      labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
-  scale_shape_manual(values =c(15,16,17,18),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+    scale_fill_manual(values = alpha(c("#4DAF4A","#984EA3","#FF7F00","#377EB8"),.7),
+                     labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
+  scale_shape_manual(values =c(21,22,23,24),labels=c("Unlinked",expression("A"%->%"B"),expression("A"%<-%"B"),expression("A"%<->%"B")))+
   facet_wrap(~cyclic)+
   ggtitle("Event-based")+
   xlab("Model")+
   ylab("Human")+
   theme_classic()+
-  geom_text(aes(label=cor, size=1),parse = TRUE,colour="black", x=14, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
+  geom_text(aes(label=cor), size=7,parse = TRUE,colour="black", x=25, y=Inf, vjust=1.5, show.legend=FALSE,check_overlap=T)+
   theme(legend.position = c(0.94,0.2),
   axis.text=element_text(size=12),
   strip.text.x = element_text(size = 14),

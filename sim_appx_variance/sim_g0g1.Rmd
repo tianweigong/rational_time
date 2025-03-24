@@ -1,0 +1,197 @@
+---
+title: ""
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+library(parallel)
+library(ggplot2)
+library(matrixStats)
+source("fun_g0g1.R")
+```
+
+follow Griffith & Tenenbaum (2005) idea to choose between G0 and G1 structure
+```{r}
+myG0<-function(dlb,br){ #baserate only
+  apply(cbind(1:samp),1,function(x){prod(dgamma(dlb,1,br[x]))})
+}
+
+myG1<-function(df.path,df.delay,df.prob,del.nam,del.tim,del.pro,del.typ,df.miss,t_c,t_end,br,c_p,c_al,c_bt){ #baserate and cause
+  apply(cbind(1:samp),1,function(x){
+    
+    del.pro[del.typ]=dgamma(del.tim[del.typ],c_al[x],c_bt[x])*c_p[x]
+    del.pro[!del.typ]=dgamma(del.tim[!del.typ],1,br[x])
+    
+    for (k in del.nam){
+      df.prob[which(df.delay==k)]=del.pro[k]
+    }
+    
+    for (k in 1:length(t_c)){
+     df.miss[which(df.miss[,k]==0),k]= (1-c_p[x])+c_p[x]*(1-pgamma(t_end-t_c[k],c_al[x],c_bt[x]))
+    }
+    sum(rowProds(df.prob)*rowProds(df.miss))
+    })
+}
+```
+
+```{r}
+mySim<-function(sti){
+  if (!paste(sti[["w_c"]],sti[["mu"]],sti[["sigm"]]) %in% 
+    c("1 10 1","1 10 2","0.8 10 1","0.8 10 2","1 20 2","1 20 4")){
+      sti[["G1"]]=NA
+      sti[["G0"]]=NA
+      sti[["par1"]]=NA
+      sti[["par0"]]=NA
+        return(sti)
+  }
+  
+  
+  # c("1 40 1", "1 40 4", "2 20 1", "2 20 2", "4 10 1","4 20 1","4 40 1")
+  br= 1/ runif(samp,0,100) #exp(runif(samp,log(1e-6),log(1e6)))  #  runif(samp,0,10) #base rate 
+  c_p=runif(samp,0,1) #causal power of the target cause
+  c_m=runif(samp,0,100) #0 to 300 s 
+  
+  if ("pri" %in% names(sti)){
+    c_m=rgamma(samp,sti[["pri"]][1],sti[["pri"]][2])
+    # c_v=runif(samp,0,25)
+  }
+  
+  c_v=sapply(c_m^2, function(x){runif(1)*x})
+  
+  c_al=(c_m^2)/c_v
+  c_bt=c_m/c_v
+  
+  t_e=sti[["t_e"]]
+  t_c=sti[["t_c"]]
+  
+  lis.cau=list()
+  for (k in 1:length(t_e)){
+    cau=t_c[t_c<t_e[k]]
+    cau=cau[cau>t_e[k]-30]
+    if (length(cau)){
+      lis.cau[[k]]=c("B",names(cau))
+      # lis.cau[[k]]=c("B",paste("C",s2(c(1:length(cau))),sep=""))
+    }else{
+      lis.cau[[k]]=c("B")
+    }
+  }
+  
+  df=expand.grid(lis.cau,stringsAsFactors = F)
+  idx=df %>% apply(1, function(x){ y=x[x!="B"]
+    if (!length(y) || length(unique(y))==length(y)){T}else{F}})
+  df.path=df[idx,,drop=FALSE]
+  
+  df.delay=df.path %>% apply(1, function(x){
+    idx_e=which(x=="B")
+    idx_c=which(x!="B")
+    if (length(idx_e)){
+      x[idx_e]=paste("E",s2(c(0,idx_e[-length(idx_e)])),"E",s2(idx_e),sep="")
+    }
+    if (length(idx_c)){
+      x[idx_c]=paste(x[idx_c],"E",s2(idx_c),sep="")
+    }
+    x
+  }) %>% t() %>%as.matrix()
+  
+  df.prob=matrix(NA,nrow = nrow(df.delay),ncol=ncol(df.delay))
+  
+  del.nam=unique(as.character(df.delay))
+  del.tim=c()
+  del.pro=rep(NA,length(del.nam))
+  names(del.pro)=del.nam
+  del.typ=substr(del.nam,1,1)=="C"
+  t_all=c(t_c,t_e,"E00"=0)
+  for (k in del.nam){
+    t_d=round(t_all[substr(k,4,6)]-t_all[substr(k,1,3)],2)
+    del.tim=c(del.tim,as.numeric(t_d))
+  }
+  
+  df.miss=matrix(1,nrow=nrow(df.path),ncol =length(t_c))
+  for (k in 1:nrow(df.miss)){
+    tmp=setdiff(names(t_c),df.path[k,])
+    if (length(tmp)){df.miss[k,as.numeric(substr(tmp,2,3))]=0}
+  }
+
+  t0=Sys.time()
+  g1=myG1(df.path,df.delay,df.prob,del.nam,del.tim,del.pro,del.typ,df.miss,t_c,t_end,br,c_p,c_al,c_bt)
+Sys.time()-t0
+  
+  dlb=diff(c(0,t_e))
+  g0=myG0(dlb,br)
+  
+  ix1=sort(g1, index.return=TRUE,decreasing=TRUE)$ix[1:100]
+  ix0=sort(g0, index.return=TRUE,decreasing=TRUE)$ix[1:100]
+  
+  g1_par=list("g1"=g1[ix1],"br"=br[ix1],"c_p"=c_p[ix1],"c_m"=c_m[ix1],"c_v"=c_v[ix1])
+  g0_par=list("g0"=g0[ix0],"br"=br[ix0])
+  
+  
+  sti[["G1"]]=log(mean(g1))
+  sti[["G0"]]=log(mean(g0))
+  sti[["par1"]]=g1_par
+  sti[["par0"]]=g0_par
+
+  return(sti)
+}
+```
+
+#variance persistence
+```{r}
+set.seed(10)
+
+samp=10000
+sim=200
+w_c=c(1,0.8)
+mu=c(10,20)
+sigm=c(1,2,4)
+
+t_end=100
+k_c=3
+k_b=1
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim/duration100_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+t0=Sys.time()
+myRun(wholelist[[1]])
+Sys.time()-t0
+
+t_end=150
+k_c=5
+k_b=2
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim/duration150_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+
+t_end=200
+k_c=7
+k_b=3
+wholelist=lapply(as.list(1:sim),
+                 function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+                                  "nam"="sim/duration200_","simCode"=x)})
+mclapply(wholelist,myRun,mc.cores=20)
+
+# set.seed(10)
+# t_end=250
+# k_c=9
+# k_b=4
+# wholelist=lapply(as.list(1:sim),
+#                  function(x){list("sti"=myStiGen(k_b,k_c,w_c,mu,sigm),
+#                                   "nam"="sim/duration250_","simCode"=x)})
+# mclapply(wholelist,myRun,mc.cores=20)
+```
+
+```{r}
+p=c()
+for (k in 1:10000){
+  p=c(p,diff(sort(runif(4,0,250))))
+}
+mean(p)
+```
+
